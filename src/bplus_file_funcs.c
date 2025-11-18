@@ -15,7 +15,7 @@
         }                         \
     }
 
-const char BP_MAGIC_NUM[4] = { 0x80, 0xAA, 'B', 'P' }; // this identifies the file format
+const char BF_MAGIC_NUM[4] = { 0x80, 0xAA, 'B', 'P' }; // this identifies the file format
 
 int bplus_create_file(const TableSchema *schema, const char *fileName)
 {
@@ -35,7 +35,7 @@ int bplus_create_file(const TableSchema *schema, const char *fileName)
     BPlusMeta *header_temp = malloc(sizeof(BPlusMeta));
     if (!header_temp) return -1;
 
-    memcpy(header_temp->magic_num, BP_MAGIC_NUM, sizeof(BP_MAGIC_NUM));
+    memcpy(header_temp->magic_num, BF_MAGIC_NUM, sizeof(BF_MAGIC_NUM));
     header_temp->block_count = 1; // including header_block
     header_temp->record_count = 0;
     memcpy(&(header_temp->schema), schema, sizeof(TableSchema));
@@ -72,7 +72,7 @@ int bplus_open_file(const char *fileName, int *file_desc, BPlusMeta **metadata) 
     // checking magic number
     BPlusMeta *temp = malloc(sizeof(BPlusMeta));
     memcpy(temp, header_data, sizeof(BPlusMeta)); // memcpy to avoid alignment issues
-    int magic_num_is_valid = (memcmp(temp->magic_num, BP_MAGIC_NUM, sizeof(BP_MAGIC_NUM)) == 0);
+    int magic_num_is_valid = (memcmp(temp->magic_num, BF_MAGIC_NUM, sizeof(BF_MAGIC_NUM)) == 0);
     free(temp);
     if (!magic_num_is_valid) return -1;
 
