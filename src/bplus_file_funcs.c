@@ -67,14 +67,11 @@ int bplus_close_file(const int file_desc, BPlusMeta* metadata)
     return -1;
 }
 
-int bplus_record_insert(const int file_desc, BPlusMeta *metadata, const Record *record)
-{
+int bplus_record_insert(const int file_desc, BPlusMeta *metadata, const Record *record) {
     return -1;
 }
 
-int bplus_record_find(const int file_desc, const BPlusMeta *metadata, const int key, Record** out_record)
-{  
-  *out_record=NULL;
+int bplus_record_find(const int file_desc, const BPlusMeta *metadata, const int key, Record **out_record) {
+    *out_record = NULL;
     return -1;
 }
-
