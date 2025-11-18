@@ -4,14 +4,14 @@
 #include <string.h>
 
 #define CALL_BF(call)         \
-  {                           \
-    BF_ErrorCode code = call; \
-    if (code != BF_OK)        \
-    {                         \
-      BF_PrintError(code);    \
-      return bplus_ERROR;     \
-    }                         \
-  }
+    {                           \
+        BF_ErrorCode code = call; \
+        if (code != BF_OK)        \
+        {                         \
+            BF_PrintError(code);    \
+            return bplus_ERROR;     \
+        }                         \
+    }
 
 #define bplus_ERROR -1
 
@@ -59,12 +59,12 @@ int bplus_create_file(const TableSchema *schema, const char *fileName)
 
 int bplus_open_file(const char *fileName, int *file_desc, BPlusMeta **metadata)
 {
-    return -1;
+        return -1;
 }
 
 int bplus_close_file(const int file_desc, BPlusMeta* metadata)
 {
-    return -1;
+         return -1;
 }
 
 int bplus_record_insert(const int file_desc, BPlusMeta *metadata, const Record *record) {
