@@ -69,6 +69,13 @@ int bplus_open_file(const char *fileName, int *file_desc, BPlusMeta **metadata) 
     CALL_BF(BF_GetBlock(*file_desc, 0, header_block));
     char *header_data = BF_Block_GetData(header_block);
 
+    // checking magic number
+    BPlusMeta *temp = malloc(sizeof(BPlusMeta));
+    memcpy(temp, header_data, sizeof(BPlusMeta)); // memcpy to avoid alignment issues
+    int magic_num_is_valid = (memcmp(temp->magic_num, BP_MAGIC_NUM, sizeof(BP_MAGIC_NUM)) == 0);
+    free(temp);
+    if (!magic_num_is_valid) return -1;
+
     // Copying metadata from block 0 to the given pointer
     *metadata = malloc(sizeof(BPlusMeta));
     if (!(*metadata)) {
