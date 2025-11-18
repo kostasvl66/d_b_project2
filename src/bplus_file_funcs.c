@@ -15,7 +15,7 @@
 
 #define bplus_ERROR -1
 
-const char BP_MAGIC_NUM[4] = { 0x80, 0xAA, 'B', 'P' };
+const char BP_MAGIC_NUM[4] = { 0x80, 0xAA, 'B', 'P' }; // this identifies the file format
 
 int bplus_create_file(const TableSchema *schema, const char *fileName)
 {
