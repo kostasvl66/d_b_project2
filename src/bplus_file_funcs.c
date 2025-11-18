@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define bplus_ERROR -1
+
 #define CALL_BF(call)         \
     {                           \
         BF_ErrorCode code = call; \
@@ -12,8 +14,6 @@
             return bplus_ERROR;     \
         }                         \
     }
-
-#define bplus_ERROR -1
 
 const char BP_MAGIC_NUM[4] = { 0x80, 0xAA, 'B', 'P' }; // this identifies the file format
 
