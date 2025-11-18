@@ -46,8 +46,8 @@ int bplus_open_file(const char *fileName, int *file_desc, BPlusMeta **metadata) 
     BF_Block_Destroy(&header_block);
     header_block = NULL;
 
-    free(header_data);
-    header_data = NULL;
+    // free(header_data);
+    // header_data = NULL;
 
     return 0;
 }
