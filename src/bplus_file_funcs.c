@@ -39,7 +39,8 @@ int bplus_create_file(const TableSchema *schema, const char *fileName)
     header_temp->block_count = 1; // including header_block
     header_temp->record_count = 0;
     memcpy(&(header_temp->schema), schema, sizeof(TableSchema));
-    //header_temp->max_records_per_block = (int)((BF_BLOCK_SIZE - METADATA_SIZE) / header_temp->schema.record_size); // uncomment later
+    header_temp->max_records_per_block = (int)((BF_BLOCK_SIZE - sizeof(DataNodeHeader)) / (schema->record_size + sizeof(int)));
+    header_temp->max_indexes_per_block = 1 + (int)((BF_BLOCK_SIZE - sizeof(IndexNodeHeader) - sizeof(int)) / sizeof(IndexNodeEntry));
 
     memcpy(BF_Block_GetData(header_block), header_temp, sizeof(BPlusMeta)); // memcpy to avoid unaligned address problems
     free(header_temp);
