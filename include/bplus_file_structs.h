@@ -15,6 +15,7 @@ typedef struct {
     int block_count; // total number of blocks in the file
     int record_count; // total number of records in the file
     int max_records_per_block; // maximum number of records in a data block
+    int max_indexes_per_block; // maximum number of indexes in an index block to its children
     TableSchema schema; // info for the stored schema (includes record size)
 } BPlusMeta;
 
