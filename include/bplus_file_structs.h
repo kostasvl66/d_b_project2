@@ -10,6 +10,14 @@
 #include "bplus_index_node.h"
 #include "record.h"
 
+/* The structure of a B+ Tree file is the following:
+** (START)[Block0][Block1][Block2]...[BlockN](END) where N is block_count - 1
+** - Block0 always contains the BPlusMeta
+** - The next blocks can be either data blocks or index blocks and are always appended at the end of the file
+** The position (0-based) of each block in the file is defined as its index. Each block stores indexes that 
+** act as pointers to other blocks, and these connections shape the B+ Tree. The index of the root can be found in BPlusMeta.
+*/
+
 typedef struct {
     char magic_num[4]; // identifies the file format
     int block_count; // total number of blocks in the file
