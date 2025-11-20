@@ -4,6 +4,12 @@
 
 #ifndef BPLUS_BPLUS_FILE_STRUCTS_H
 #define BPLUS_BPLUS_FILE_STRUCTS_H
+
+// needed for bplus_datanode.c and bplus_index_node.c
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
 #include "bf.h"
 #include "bplus_datanode.h"
 #include "bplus_file_structs.h"

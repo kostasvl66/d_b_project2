@@ -1,11 +1,15 @@
 #ifndef BP_DATANODE_H
 #define BP_DATANODE_H
+
+#define BLOCK_TYPE_DATA 0
+#define BLOCK_TYPE_INDEX 1
+
 /* Στο αντίστοιχο αρχείο .h μπορείτε να δηλώσετε τις συναρτήσεις
  * και τις δομές δεδομένων που σχετίζονται με τους Κόμβους Δεδομένων.*/
 
 /* The structure of a data block is the following; for each [][] pair there is no padding between
 ** (START)[int][DataNodeHeader][int[max_records_per_block]][Record][Record]...[Record][possibly unused space](END)
-** - int is 0 for data block, 1 for index block
+** - int is BLOCK_TYPE_DATA for data block, BLOCK_TYPE_INDEX for index block
 ** - DataNodeHeader is the data block header
 ** - int[max_records_per_block] is an array of indexes to records, remains sorted so that the records themselves need not be sorted;
 **                              Only the first n values are valid, if n is the current number of records in the block
@@ -19,5 +23,8 @@ typedef struct {
     int parent_index; // index of the parent block (index node)
     int next_index; // index to the adjacent (to the right) data node
 } DataNodeHeader;
+
+// prints a data block (block must already be initialized)
+void print_data_block(BF_Block* block, BPlusMeta* metadata);
 
 #endif
