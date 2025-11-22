@@ -35,7 +35,23 @@ typedef struct {
     int right_index;
 } IndexNodeEntry;
 
-// prints an index block (block must already be initialized)
-void print_index_block(BF_Block* block, BPlusMeta* metadata);
+// returns 1 if this is an index block, 0 otherwise
+int is_index_block(char *block_start);
+
+// prints an index block (requires pointer to block data)
+void index_block_print(char *block_start, BPlusMeta* metadata);
+
+// returns pointer to the first byte of IndexNodeHeader
+char *index_block_get_header(char *block_start);
+
+// returns pointer to the first byte of the leftmost index
+char *index_block_get_leftmost_index(char *block_start);
+
+// returns pointer to the first byte of the entry at index, sorted
+// returns NULL if index >= current entry count
+char *index_block_get_entry(char *block_start, BPlusMeta *metadata, int index);
+
+// returns 1 if at least one more entry can be inserted, 0 otherwise
+int index_block_has_available_space(char *block_start, BPlusMeta *metadata);
 
 #endif

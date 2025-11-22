@@ -13,10 +13,9 @@
         }                         \
     }
 
-void print_data_block(BF_Block* block, BPlusMeta* metadata)
+void data_block_print(char *block_start, BPlusMeta* metadata)
 {
-    char *block_ptr = BF_Block_GetData(block);
-    char *block_start = block_ptr;
+    char *block_ptr = block_start; // block_ptr will be moving forward
 
     int block_type;
     memcpy(&block_type, block_ptr, sizeof(int));
