@@ -13,6 +13,13 @@
         }                         \
     }
 
+int is_data_block(char *block_start)
+{
+    int block_type;
+    memcpy(&block_type, block_start, sizeof(int));
+    return (block_type == BLOCK_TYPE_DATA);
+}
+
 void data_block_print(char *block_start, BPlusMeta* metadata)
 {
     char *block_ptr = block_start; // block_ptr will be moving forward
@@ -61,4 +68,66 @@ void data_block_print(char *block_start, BPlusMeta* metadata)
 
     for (int i = 0; i < 20; i++) printf("-");
     printf("\n");
+}
+
+DataNodeHeader *data_block_get_header(char *block_start)
+{
+    char *target_start = block_start + sizeof(int);
+
+    DataNodeHeader *result = malloc(sizeof(DataNodeHeader));
+    if (!result) return NULL;
+
+    memcpy(result, target_start, sizeof(DataNodeHeader));
+    return result;
+}
+
+int *data_block_get_index_array(char *block_start, BPlusMeta *metadata)
+{
+    char *target_start = block_start + sizeof(int) + sizeof(DataNodeHeader);
+
+    int *result = malloc(metadata->max_records_per_block * sizeof(int));
+    if (!result) return NULL;
+
+    memcpy(result, target_start, metadata->max_records_per_block * sizeof(int));
+    return result;
+}
+
+Record *data_block_get_unordered_record(char *block_start, BPlusMeta *metadata, int index)
+{
+    if (index >= metadata->max_records_per_block)
+        return NULL;
+
+    int index_array_length = metadata->max_records_per_block;
+    char *record0_start = block_start + sizeof(int) + sizeof(DataNodeHeader) + index_array_length * sizeof(int);
+    char *target_start = record0_start + index * sizeof(Record);
+
+    Record *result = malloc(sizeof(Record));
+    if (!result) return NULL;
+
+    memcpy(result, target_start, sizeof(Record));
+    return result;
+}
+
+Record *data_block_get_record(char *block_start, DataNodeHeader *block_header, int *index_array, BPlusMeta *metadata, int index)
+{
+    if (index >= block_header->record_count)
+        return NULL;
+
+    int index_array_length = metadata->max_records_per_block;
+    char *record0_start = block_start + sizeof(int) + sizeof(DataNodeHeader) + index_array_length * sizeof(int);
+
+    // index of record in the unsorted "heap" of records
+    int heap_index = index_array[index];
+    char *target_start = record0_start + heap_index * sizeof(Record);
+
+    Record *result = malloc(sizeof(Record));
+    if (!result) return NULL;
+
+    memcpy(result, target_start, sizeof(Record));
+    return result;
+}
+
+int data_block_has_available_space(DataNodeHeader *block_header, BPlusMeta *metadata)
+{
+    return (block_header->record_count < metadata->max_records_per_block);
 }

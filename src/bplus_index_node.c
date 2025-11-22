@@ -13,6 +13,13 @@
         }                         \
     }
 
+int is_index_block(char *block_start)
+{
+    int block_type;
+    memcpy(&block_type, block_start, sizeof(int));
+    return (block_type == BLOCK_TYPE_INDEX);
+}
+
 void index_block_print(char *block_start, BPlusMeta* metadata)
 {
     char *block_ptr = block_start; // block_ptr will be moving forward
@@ -56,4 +63,45 @@ void index_block_print(char *block_start, BPlusMeta* metadata)
 
     for (int i = 0; i < 20; i++) printf("-");
     printf("\n");
+}
+
+IndexNodeHeader *index_block_get_header(char *block_start)
+{
+    char *target_start = block_start + sizeof(int);
+
+    IndexNodeHeader *result = malloc(sizeof(IndexNodeHeader));
+    if (!result) return NULL;
+
+    memcpy(result, target_start, sizeof(IndexNodeHeader));
+    return result;
+}
+
+int index_block_get_leftmost_index(char *block_start)
+{
+    char *target_start = block_start + sizeof(int) + sizeof(IndexNodeHeader);
+
+    int result;
+    memcpy(&result, target_start, sizeof(int));
+    return result;
+}
+
+IndexNodeEntry *index_block_get_entry(char *block_start, IndexNodeHeader *block_header, int index)
+{
+    int entry_count = block_header->index_count - 1; // leftmost index is not considered an entry
+    if (index >= entry_count)
+        return NULL;
+
+    char *entry0_start = block_start + sizeof(int) + sizeof(IndexNodeHeader) + sizeof(int);
+    char *target_start = entry0_start + index * sizeof(IndexNodeEntry);
+
+    IndexNodeEntry *result = malloc(sizeof(IndexNodeEntry));
+    if (!result) return NULL;
+
+    memcpy(result, target_start, sizeof(IndexNodeEntry));
+    return result;
+}
+
+int index_block_has_available_space(IndexNodeHeader *block_header, BPlusMeta *metadata)
+{
+    return (block_header->index_count < metadata->max_indexes_per_block);
 }

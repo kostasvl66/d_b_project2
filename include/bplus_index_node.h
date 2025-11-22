@@ -1,7 +1,6 @@
 #ifndef BP_INDEX_NODE_H
 #define BP_INDEX_NODE_H
 
-#define BLOCK_TYPE_DATA 0
 #define BLOCK_TYPE_INDEX 1
 
 /* Στο αντίστοιχο αρχείο .h μπορείτε να δηλώσετε τις συναρτήσεις
@@ -20,8 +19,9 @@
 */
 
 typedef struct {
-    // number of children indexes currently stored
-    // number of keys is always current_index_count - 1
+    // index_count is the number of children indexes currently stored
+    // number of keys is always index_count - 1
+    // number of entries (IndexNodeEntry) is also index_count - 1 (leftmost index is not an "entry")
     int index_count;
     int parent_index; // index of the parent block (index node)
     int min_record_key; // the minimum key accessible via the leftmost index; useful in insertion
@@ -41,17 +41,20 @@ int is_index_block(char *block_start);
 // prints an index block (requires pointer to block data)
 void index_block_print(char *block_start, BPlusMeta* metadata);
 
-// returns pointer to the first byte of IndexNodeHeader
-char *index_block_get_header(char *block_start);
+// returns the index node header of a block
+// returns NULL if unsuccessful
+// caller is responsible for freeing the returned memory
+IndexNodeHeader *index_block_get_header(char *block_start);
 
-// returns pointer to the first byte of the leftmost index
-char *index_block_get_leftmost_index(char *block_start);
+// returns the leftmost index of a block
+int index_block_get_leftmost_index(char *block_start);
 
-// returns pointer to the first byte of the entry at index, sorted
-// returns NULL if index >= current entry count
-char *index_block_get_entry(char *block_start, BPlusMeta *metadata, int index);
+// returns the entry at index (entries sorted by key)
+// returns NULL if index >= current entry count or if unsuccessful
+// caller is responsible for freeing the returned memory
+IndexNodeEntry *index_block_get_entry(char *block_start, IndexNodeHeader *block_header, int index);
 
 // returns 1 if at least one more entry can be inserted, 0 otherwise
-int index_block_has_available_space(char *block_start, BPlusMeta *metadata);
+int index_block_has_available_space(IndexNodeHeader *block_header, BPlusMeta *metadata);
 
 #endif
