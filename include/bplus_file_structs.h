@@ -22,6 +22,7 @@
 ** - The next blocks can be either data blocks or index blocks and are always appended at the end of the file
 ** The position (0-based) of each block in the file is defined as its index. Each block stores indexes that 
 ** act as pointers to other blocks, and these connections shape the B+ Tree. The index of the root can be found in BPlusMeta.
+** - When a block has no children or parent, the related indexes are defined to be -1. This is equivalent to NULL pointers.
 */
 
 typedef struct {

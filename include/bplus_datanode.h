@@ -22,6 +22,7 @@ typedef struct {
     int record_count; // number of records currently stored in the data blocks
     int parent_index; // index of the parent block (index node)
     int next_index; // index to the adjacent (to the right) data node
+    int min_record_key; // the minimum key of all records in the block
 } DataNodeHeader;
 
 // returns 1 if this is a data block, 0 otherwise

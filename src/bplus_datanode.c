@@ -40,6 +40,7 @@ void data_block_print(char *block_start, BPlusMeta* metadata)
     printf("record_count = %d\n", header->record_count);
     printf("parent_index = %d\n", header->parent_index);
     printf("next_index = %d\n\n", header->next_index);
+    printf("min_record_key = %d\n\n", header->min_record_key);
     free(header);
     block_ptr += sizeof(DataNodeHeader);
 
