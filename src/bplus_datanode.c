@@ -71,7 +71,7 @@ void data_block_print(char *block_start, BPlusMeta* metadata)
     printf("\n");
 }
 
-DataNodeHeader *data_block_get_header(char *block_start)
+DataNodeHeader *data_block_read_header(char *block_start)
 {
     char *target_start = block_start + sizeof(int);
 
@@ -82,7 +82,7 @@ DataNodeHeader *data_block_get_header(char *block_start)
     return result;
 }
 
-int *data_block_get_index_array(char *block_start, BPlusMeta *metadata)
+int *data_block_read_index_array(char *block_start, BPlusMeta *metadata)
 {
     char *target_start = block_start + sizeof(int) + sizeof(DataNodeHeader);
 
@@ -93,7 +93,7 @@ int *data_block_get_index_array(char *block_start, BPlusMeta *metadata)
     return result;
 }
 
-Record *data_block_get_unordered_record(char *block_start, BPlusMeta *metadata, int index)
+Record *data_block_read_unordered_record(char *block_start, BPlusMeta *metadata, int index)
 {
     if (index >= metadata->max_records_per_block)
         return NULL;
@@ -109,7 +109,7 @@ Record *data_block_get_unordered_record(char *block_start, BPlusMeta *metadata, 
     return result;
 }
 
-Record *data_block_get_record(char *block_start, DataNodeHeader *block_header, int *index_array, BPlusMeta *metadata, int index)
+Record *data_block_read_record(char *block_start, DataNodeHeader *block_header, int *index_array, BPlusMeta *metadata, int index)
 {
     if (index >= block_header->record_count)
         return NULL;
@@ -128,7 +128,7 @@ Record *data_block_get_record(char *block_start, DataNodeHeader *block_header, i
     return result;
 }
 
-void data_block_get_heap_as_array(char *block_start, DataNodeHeader *block_header, BPlusMeta *metadata, Record *record_array)
+void data_block_read_heap_as_array(char *block_start, DataNodeHeader *block_header, BPlusMeta *metadata, Record *record_array)
 {
     int index_array_length = metadata->max_records_per_block;
     char *record0_start = block_start + sizeof(int) + sizeof(DataNodeHeader) + index_array_length * sizeof(int);

@@ -65,7 +65,7 @@ void index_block_print(char *block_start, BPlusMeta* metadata)
     printf("\n");
 }
 
-IndexNodeHeader *index_block_get_header(char *block_start)
+IndexNodeHeader *index_block_read_header(char *block_start)
 {
     char *target_start = block_start + sizeof(int);
 
@@ -76,7 +76,7 @@ IndexNodeHeader *index_block_get_header(char *block_start)
     return result;
 }
 
-int index_block_get_leftmost_index(char *block_start)
+int index_block_read_leftmost_index(char *block_start)
 {
     char *target_start = block_start + sizeof(int) + sizeof(IndexNodeHeader);
 
@@ -85,7 +85,7 @@ int index_block_get_leftmost_index(char *block_start)
     return result;
 }
 
-IndexNodeEntry *index_block_get_entry(char *block_start, IndexNodeHeader *block_header, int index)
+IndexNodeEntry *index_block_read_entry(char *block_start, IndexNodeHeader *block_header, int index)
 {
     int entry_count = block_header->index_count - 1; // leftmost index is not considered an entry
     if (index >= entry_count)
@@ -101,7 +101,7 @@ IndexNodeEntry *index_block_get_entry(char *block_start, IndexNodeHeader *block_
     return result;
 }
 
-void index_block_get_entries_as_array(char *block_start, IndexNodeHeader *block_header, IndexNodeEntry *entry_array)
+void index_block_read_entries_as_array(char *block_start, IndexNodeHeader *block_header, IndexNodeEntry *entry_array)
 {
     char *leftmost_index_start = block_start + sizeof(int) + sizeof(IndexNodeHeader);
     char *entry1_start = leftmost_index_start + sizeof(int) + sizeof(IndexNodeEntry);
@@ -119,14 +119,12 @@ int index_block_has_available_space(IndexNodeHeader *block_header, BPlusMeta *me
     return (block_header->index_count < metadata->max_indexes_per_block);
 }
 
-// writes header in the IndexNodeHeader part of the block
 void index_block_write_header(char *block_start, IndexNodeHeader *header)
 {
     char *target_start = block_start + sizeof(int);
     memcpy(target_start, header, sizeof(IndexNodeHeader));
 }
 
-// writes leftmost_index in the leftmost index part of the block
 void index_block_write_leftmost_index(char *block_start, int leftmost_index)
 {
     char *target_start = block_start + sizeof(int) + sizeof(IndexNodeHeader);

@@ -34,28 +34,28 @@ void data_block_print(char *block_start, BPlusMeta *metadata);
 // returns the data node header of a block
 // returns NULL if unsuccessful
 // caller is responsible for freeing the returned memory
-DataNodeHeader *data_block_get_header(char *block_start);
+DataNodeHeader *data_block_read_header(char *block_start);
 
 // returns the index array of a block
 // returns NULL if unsuccessful
 // caller is responsible for freeing the returned memory
-int *data_block_get_index_array(char *block_start, BPlusMeta *metadata);
+int *data_block_read_index_array(char *block_start, BPlusMeta *metadata);
 
 // returns the record at index, where index refers to the unsorted heap of records
 // returns NULL if index >= max record count per block or if unsuccessful
 // caller is responsible for freeing the returned memory
-Record *data_block_get_unordered_record(char *block_start, BPlusMeta *metadata, int index);
+Record *data_block_read_unordered_record(char *block_start, BPlusMeta *metadata, int index);
 
 // returns the record at index, where index i refers to the i-th smallest record (sorted)
 // returns NULL if index >= current record count or if unsuccessful
 // caller is responsible for freeing the returned memory
 // index_array is assumed to have length == max record count per block
-Record *data_block_get_record(char *block_start, DataNodeHeader *block_header, int *index_array, BPlusMeta *metadata, int index);
+Record *data_block_read_record(char *block_start, DataNodeHeader *block_header, int *index_array, BPlusMeta *metadata, int index);
 
 // fills an allocated buffer record_array with all records of the block, 
 // in the order they appear with in the heap part of the block (only copies the current count of records)
 // record_array buffer is assumed to be large enough to fit the records; if not, this is undefined behavior
-void data_block_get_heap_as_array(char *block_start, DataNodeHeader *block_header, BPlusMeta *metadata, Record *record_array);
+void data_block_read_heap_as_array(char *block_start, DataNodeHeader *block_header, BPlusMeta *metadata, Record *record_array);
 
 // returns 1 if at least one more record can be inserted, 0 otherwise
 int data_block_has_available_space(DataNodeHeader *block_header, BPlusMeta *metadata);

@@ -44,21 +44,21 @@ void index_block_print(char *block_start, BPlusMeta* metadata);
 // returns the index node header of a block
 // returns NULL if unsuccessful
 // caller is responsible for freeing the returned memory
-IndexNodeHeader *index_block_get_header(char *block_start);
+IndexNodeHeader *index_block_read_header(char *block_start);
 
 // returns the leftmost index of a block
-int index_block_get_leftmost_index(char *block_start);
+int index_block_read_leftmost_index(char *block_start);
 
 // returns the entry at index (entries sorted by key)
 // returns NULL if index >= current entry count or if unsuccessful
 // caller is responsible for freeing the returned memory
-IndexNodeEntry *index_block_get_entry(char *block_start, IndexNodeHeader *block_header, int index);
+IndexNodeEntry *index_block_read_entry(char *block_start, IndexNodeHeader *block_header, int index);
 
 // fills an allocated buffer entry_array with all entries of the block, **including leftmost index** as an entry,
 // with the appropriate value as the minimum key
 // the count of copied entries is the current count of indexes (that is current entry count + 1)
 // entry_array buffer is assumed to be large enough to fit the entries; if not, this is undefined behavior
-void index_block_get_entries_as_array(char *block_start, IndexNodeHeader *block_header, IndexNodeEntry *entry_array);
+void index_block_read_entries_as_array(char *block_start, IndexNodeHeader *block_header, IndexNodeEntry *entry_array);
 
 // returns 1 if at least one more entry can be inserted, 0 otherwise
 int index_block_has_available_space(IndexNodeHeader *block_header, BPlusMeta *metadata);
