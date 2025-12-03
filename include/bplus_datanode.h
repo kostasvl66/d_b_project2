@@ -13,7 +13,7 @@
 ** - int[max_records_per_block] is an array of indexes to records, remains sorted so that the records themselves need not be sorted;
 **                              Only the first n values are valid, if n is the current number of records in the block
 ** - Record (0) ... Record (k) with k < max_records_per_block are record data, each new one appended at the end;
-**                             because of that, this "heap" part is unsorted; their sorted order is defined using
+**                             because of that, this heap part is unsorted; their sorted order is defined using
 **                             the index array, which is always updated as needed
 ** - possibly unused space is either space not yet used by future records or a remainder < sizeof(Record)
 */
@@ -22,7 +22,7 @@ typedef struct {
     int record_count; // number of records currently stored in the data blocks
     int parent_index; // index of the parent block (index node)
     int next_index; // index to the adjacent (to the right) data node
-    int min_record_key; // the minimum key of all records in the block
+    int min_record_key; // the minimum key of all records in the block; useful in insertion
 } DataNodeHeader;
 
 // returns 1 if this is a data block, 0 otherwise
@@ -41,7 +41,7 @@ DataNodeHeader *data_block_get_header(char *block_start);
 // caller is responsible for freeing the returned memory
 int *data_block_get_index_array(char *block_start, BPlusMeta *metadata);
 
-// returns the record at index, where index refers to the unsorted "heap" of records
+// returns the record at index, where index refers to the unsorted heap of records
 // returns NULL if index >= max record count per block or if unsuccessful
 // caller is responsible for freeing the returned memory
 Record *data_block_get_unordered_record(char *block_start, BPlusMeta *metadata, int index);
@@ -52,7 +52,22 @@ Record *data_block_get_unordered_record(char *block_start, BPlusMeta *metadata, 
 // index_array is assumed to have length == max record count per block
 Record *data_block_get_record(char *block_start, DataNodeHeader *block_header, int *index_array, BPlusMeta *metadata, int index);
 
+// fills an allocated buffer record_array with all records of the block, 
+// in the order they appear with in the heap part of the block (only copies the current count of records)
+// record_array buffer is assumed to be large enough to fit the records; if not, this is undefined behavior
+void data_block_get_heap_as_array(char *block_start, DataNodeHeader *block_header, BPlusMeta *metadata, Record *record_array);
+
 // returns 1 if at least one more record can be inserted, 0 otherwise
 int data_block_has_available_space(DataNodeHeader *block_header, BPlusMeta *metadata);
+
+// writes header in the DataNodeHeader part of the block
+void data_block_write_header(char *block_start, DataNodeHeader *header);
+
+// writes index_array in the index array part of the block
+void data_block_write_index_array(char *block_start, BPlusMeta *metadata, int *index_array);
+
+// writes record at index of the unsorted heap of records in the block
+// returns -1 if index >= max record count per block, else 0 (successful)
+int data_block_write_unordered_record(char *block_start, BPlusMeta *metadata, int index, Record *record);
 
 #endif

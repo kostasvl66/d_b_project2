@@ -128,7 +128,40 @@ Record *data_block_get_record(char *block_start, DataNodeHeader *block_header, i
     return result;
 }
 
+void data_block_get_heap_as_array(char *block_start, DataNodeHeader *block_header, BPlusMeta *metadata, Record *record_array)
+{
+    int index_array_length = metadata->max_records_per_block;
+    char *record0_start = block_start + sizeof(int) + sizeof(DataNodeHeader) + index_array_length * sizeof(int);
+
+    memcpy(record_array, record0_start, block_header->record_count * sizeof(Record));
+}
+
 int data_block_has_available_space(DataNodeHeader *block_header, BPlusMeta *metadata)
 {
     return (block_header->record_count < metadata->max_records_per_block);
+}
+
+void data_block_write_header(char *block_start, DataNodeHeader *header)
+{
+    char *target_start = block_start + sizeof(int);
+    memcpy(target_start, header, sizeof(DataNodeHeader));
+}
+
+void data_block_write_index_array(char *block_start, BPlusMeta *metadata, int *index_array)
+{
+    char *target_start = block_start + sizeof(int) + sizeof(DataNodeHeader);
+    memcpy(target_start, index_array, metadata->max_records_per_block * sizeof(int));
+}
+
+int data_block_write_unordered_record(char *block_start, BPlusMeta *metadata, int index, Record *record)
+{
+    if (index >= metadata->max_records_per_block)
+        return -1;
+    
+    int index_array_length = metadata->max_records_per_block;
+    char *record0_start = block_start + sizeof(int) + sizeof(DataNodeHeader) + index_array_length * sizeof(int);
+    char *target_start = record0_start + index * sizeof(Record);
+
+    memcpy(target_start, record, sizeof(Record));
+    return 0;
 }

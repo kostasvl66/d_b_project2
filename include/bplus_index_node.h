@@ -24,7 +24,7 @@ typedef struct {
     // number of entries (IndexNodeEntry) is also index_count - 1 (leftmost index is not an "entry")
     int index_count;
     int parent_index; // index of the parent block (index node)
-    int min_record_key; // the minimum key accessible via the leftmost index; useful in insertion
+    int min_record_key; // minimum key accessible via the leftmost index; useful in insertion
 } IndexNodeHeader;
 
 typedef struct {
@@ -54,7 +54,25 @@ int index_block_get_leftmost_index(char *block_start);
 // caller is responsible for freeing the returned memory
 IndexNodeEntry *index_block_get_entry(char *block_start, IndexNodeHeader *block_header, int index);
 
+// fills an allocated buffer entry_array with all entries of the block, **including leftmost index** as an entry,
+// with the appropriate value as the minimum key
+// the count of copied entries is the current count of indexes (that is current entry count + 1)
+// entry_array buffer is assumed to be large enough to fit the entries; if not, this is undefined behavior
+void index_block_get_entries_as_array(char *block_start, IndexNodeHeader *block_header, IndexNodeEntry *entry_array);
+
 // returns 1 if at least one more entry can be inserted, 0 otherwise
 int index_block_has_available_space(IndexNodeHeader *block_header, BPlusMeta *metadata);
+
+// writes header in the IndexNodeHeader part of the block
+void index_block_write_header(char *block_start, IndexNodeHeader *header);
+
+// writes leftmost_index in the leftmost index part of the block
+void index_block_write_leftmost_index(char *block_start, int leftmost_index);
+
+// writes the first count entries of entry_array to the block's entries, **including leftmost index** which
+// is assigned the index of entry_array[0]; also the key of entry_array[0] becomes the block's minimum key
+// count is assumed to not exceed max entry count; else, this is undefined behavior
+// if count < 1 it does nothing
+void index_block_write_array_as_entries(char *block_start, IndexNodeHeader *block_header, IndexNodeEntry *entry_array, int count);
 
 #endif
