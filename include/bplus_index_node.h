@@ -77,6 +77,7 @@ void index_block_write_leftmost_index(char *block_start, int leftmost_index);
 void index_block_write_array_as_entries(char *block_start, IndexNodeHeader *block_header, IndexNodeEntry *entry_array, int count);
 
 // returns the (0-based) position of the entry (excluding leftmost index), where a new entry with new_key as key can be inserted
+// new entries can never replace the leftmost index of an index block, so the leftmost index is excluded from the search
 // returns -1 if the specified key already exists in the index block
 // returns INDEX_BLOCK_SEARCH_ERROR if unsuccessful
 int index_block_search_insert_pos(char *block_start, IndexNodeHeader *block_header, int new_key);

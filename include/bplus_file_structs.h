@@ -23,6 +23,8 @@
 ** The position (0-based) of each block in the file is defined as its index. Each block stores indexes that 
 ** act as pointers to other blocks, and these connections shape the B+ Tree. The index of the root can be found in BPlusMeta.
 ** - When a block has no children or parent, the related indexes are defined to be -1. This is equivalent to NULL pointers.
+** - When the B+ tree gets its first record, the root is the data block itself that contains this record. Only **after** this very
+** first block has not enough space, does an index block appear as its parent and new root
 */
 
 typedef struct {

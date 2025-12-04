@@ -17,6 +17,54 @@
 
 const char BF_MAGIC_NUM[4] = { 0x80, 0xAA, 'B', 'P' }; // this identifies the file format
 
+// helper functions (not defined in bplus_file_funcs.h)
+
+// starting from the root block (with root_index), searches the data block that contains a record with key as PK
+// block must be already initialized, and gets the found block's handle
+// returns 0 on success, -1 otherwise
+int tree_search_data_block(int root_index, int key, int file_desc, BF_Block *block)
+{
+    // getting the root block and its data
+    CALL_BF(BF_GetBlock(file_desc, root_index, block));
+    char *block_start = BF_Block_GetData(block);
+
+    // if block is a data block, then it is found
+    if (is_data_block(block_start))
+        return 0;
+
+    // else it is an index block and must be searched
+    IndexNodeHeader *block_header = index_block_read_header(block_start); // getting the header
+    if (!block_header) return -1;
+
+    // determining the new_root_index to follow
+    int new_root_index;
+    int position = index_block_key_search(block_start, block_header, key);
+
+    if (position == -1) {
+        // continue in leftmost index
+        new_root_index = index_block_read_leftmost_index(block_start);
+        free(block_header);
+    }
+    else {
+        // continue in the entry index at the given position
+        IndexNodeEntry *entry = index_block_read_entry(block_start, block_header, position);
+        if (!entry) {
+            free(block_header);
+            return -1;
+        }
+
+        new_root_index = entry->right_index;
+        free(block_header);
+        free(entry);
+    }
+
+    // continuing the search in new_root_index
+    tree_search_data_block(new_root_index, key, file_desc, block);
+    return 0;
+}
+
+// bplus functions
+
 int bplus_create_file(const TableSchema *schema, const char *fileName)
 {
     BF_Block *header_block; // block 0 that contains the file header
