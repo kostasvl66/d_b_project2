@@ -2,6 +2,7 @@
 #define BP_DATANODE_H
 
 #define BLOCK_TYPE_DATA 0
+#define DATA_BLOCK_SEARCH_ERROR -2 // this refers to runtime errors (malloc etc), not logical edge cases; should be less than -1
 
 /* Στο αντίστοιχο αρχείο .h μπορείτε να δηλώσετε τις συναρτήσεις
  * και τις δομές δεδομένων που σχετίζονται με τους Κόμβους Δεδομένων.*/
@@ -69,5 +70,10 @@ void data_block_write_index_array(char *block_start, BPlusMeta *metadata, int *i
 // writes record at index of the unsorted heap of records in the block
 // returns -1 if index >= max record count per block, else 0 (successful)
 int data_block_write_unordered_record(char *block_start, BPlusMeta *metadata, int index, Record *record);
+
+// returns the (0-based) position in index array, where a new record (with new_key) heap position can be inserted
+// returns -1 if the specified key already exists in the block
+// returns DATA_BLOCK_SEARCH_ERROR if unsuccessful
+int data_block_search_insert_pos(char *block_start, DataNodeHeader *block_header, int *index_array, BPlusMeta *metadata, int new_key);
 
 #endif

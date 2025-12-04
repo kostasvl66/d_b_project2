@@ -145,3 +145,104 @@ void index_block_write_array_as_entries(char *block_start, IndexNodeHeader *bloc
     // copying the rest of the entries
     memcpy(entry1_start, entry_array + sizeof(IndexNodeEntry), (count - 1) * sizeof(IndexNodeEntry));
 }
+
+// internal binary search to use inside index_block_search_insert_pos(); both start and end are inclusive
+// returns the same as index_block_search_insert_pos()
+int index_block_binary_search_insert_pos(char *block_start, IndexNodeHeader *block_header, int start, int end, int new_key)
+{
+    if (start > end) // new entry goes in start
+        return start; 
+    
+    if (start == end) { // there is only one "unsearched" entry remaining
+        IndexNodeEntry *remaining_entry = index_block_read_entry(block_start, block_header, start);
+        if (!remaining_entry) return INDEX_BLOCK_SEARCH_ERROR;
+
+        if (remaining_entry->key == new_key) { // key already exists
+            free(remaining_entry);
+            return -1;
+        }
+        else if (remaining_entry->key > new_key) {
+            // entry must go in the current position, and the larger ones are to be shifted one place to the right
+            free(remaining_entry);
+            return start;
+        }
+        else {
+            // entry must go in the next position, and the larger ones are to be shifted one place to the right
+            free(remaining_entry);
+            return start + 1;
+        }
+    }
+
+    // more than one "unsearched" entries
+    int mid = (int)((start + end) / 2); // using the floor of the division
+    IndexNodeEntry *entry_at_mid = index_block_read_entry(block_start, block_header, mid);
+    if (!entry_at_mid) return INDEX_BLOCK_SEARCH_ERROR;
+
+    if (entry_at_mid->key == new_key) { // key already exists
+        free(entry_at_mid);
+        return -1;
+    }
+    else if (entry_at_mid->key > new_key) {
+        free(entry_at_mid);
+        return index_block_binary_search_insert_pos(block_start, block_header, start, mid - 1, new_key);
+    }
+    else {
+        free(entry_at_mid);
+        return index_block_binary_search_insert_pos(block_start, block_header, mid + 1, end, new_key);
+    }
+}
+
+int index_block_search_insert_pos(char *block_start, IndexNodeHeader *block_header, int new_key)
+{
+    return index_block_binary_search_insert_pos(block_start, block_header, 0, block_header->index_count - 1, new_key);
+}
+
+// internal binary search to use inside index_block_key_search(); both start and end are inclusive
+// returns the same as index_block_key_search()
+int index_block_key_binary_search(char *block_start, IndexNodeHeader *block_header, int start, int end, int key)
+{
+    if (start > end) // key is in leftmost index
+        return -1;
+        
+    if (start == end) { // there is only one "unsearched" entry remaining
+        IndexNodeEntry *remaining_entry = index_block_read_entry(block_start, block_header, start);
+        if (!remaining_entry) return INDEX_BLOCK_SEARCH_ERROR;
+
+        if (remaining_entry->key == key) { // key is in the current index
+            free(remaining_entry);
+            return start;
+        }
+        else if (remaining_entry->key > key) { // key is in the previous index (can be -1)
+            free(remaining_entry);
+            return start - 1;
+        }
+        else {
+            free(remaining_entry); // key is in the current index
+            return start;
+        }
+    }
+
+    // more than one "unsearched" entries
+    int mid = (int)((start + end) / 2); // using the floor of the division
+    IndexNodeEntry *entry_at_mid = index_block_read_entry(block_start, block_header, mid);
+    if (!entry_at_mid) return INDEX_BLOCK_SEARCH_ERROR;
+
+    if (entry_at_mid->key == key) { // key is in the mid index
+        free(entry_at_mid);
+        return mid;
+    }
+    else if (entry_at_mid->key > key) {
+        free(entry_at_mid);
+        return index_block_key_binary_search(block_start, block_header, start, mid - 1, key);
+    }
+    else {
+        free(entry_at_mid);
+        return index_block_key_binary_search(block_start, block_header, mid + 1, end, key);
+    }
+}
+
+int index_block_key_search(char *block_start, IndexNodeHeader *block_header, int key)
+{
+    int current_entry_count = block_header->index_count - 1;
+    return index_block_key_binary_search(block_start, block_header, 0, current_entry_count - 1, key);
+}

@@ -2,6 +2,7 @@
 #define BP_INDEX_NODE_H
 
 #define BLOCK_TYPE_INDEX 1
+#define INDEX_BLOCK_SEARCH_ERROR -2 // this refers to runtime errors (malloc etc), not logical edge cases; should be less than -1
 
 /* Στο αντίστοιχο αρχείο .h μπορείτε να δηλώσετε τις συναρτήσεις
  * και τις δομές δεδομένων που σχετίζονται με τους Κόμβους Δεδομένων.*/
@@ -74,5 +75,15 @@ void index_block_write_leftmost_index(char *block_start, int leftmost_index);
 // count is assumed to not exceed max entry count; else, this is undefined behavior
 // if count < 1 it does nothing
 void index_block_write_array_as_entries(char *block_start, IndexNodeHeader *block_header, IndexNodeEntry *entry_array, int count);
+
+// returns the (0-based) position of the entry (excluding leftmost index), where a new entry with new_key as key can be inserted
+// returns -1 if the specified key already exists in the index block
+// returns INDEX_BLOCK_SEARCH_ERROR if unsuccessful
+int index_block_search_insert_pos(char *block_start, IndexNodeHeader *block_header, int new_key);
+
+// returns the (0-based) entry position, where that entry can lead to the specified key via the entry's right_index
+// returns -1 if the specified key can be found via the leftmost index of the block
+// returns INDEX_BLOCK_SEARCH_ERROR if unsuccessful
+int index_block_key_search(char *block_start, IndexNodeHeader *block_header, int key);
 
 #endif

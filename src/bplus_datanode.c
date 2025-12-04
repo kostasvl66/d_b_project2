@@ -165,3 +165,58 @@ int data_block_write_unordered_record(char *block_start, BPlusMeta *metadata, in
     memcpy(target_start, record, sizeof(Record));
     return 0;
 }
+
+// internal binary search to use inside data_block_search_insert_pos(); both start and end are inclusive
+// returns the same as data_block_search_insert_pos()
+int data_block_binary_search_insert_pos(char *block_start, DataNodeHeader *block_header, int *index_array, BPlusMeta *metadata,
+                                        int start, int end, int new_key)
+{
+    if (start > end) // new record goes in the start
+        return start; 
+    
+    if (start == end) { // there is only one "unsearched" record remaining
+        Record *remaining_record = data_block_read_record(block_start, block_header, index_array, metadata, start);
+        if (!remaining_record) return DATA_BLOCK_SEARCH_ERROR;
+
+        int remaining_record_key = record_get_key(&(metadata->schema), remaining_record);
+        if (remaining_record_key == new_key) { // key already exists
+            free(remaining_record);
+            return -1;
+        }
+        else if (remaining_record_key > new_key) {
+            // record must go in the current position, and the larger ones are to be shifted one place to the right
+            free(remaining_record);
+            return start;
+        }
+        else {
+            // record must go in the next position, and the larger ones are to be shifted one place to the right
+            free(remaining_record);
+            return start + 1;
+        }
+    }
+
+    // more than one "unsearched" records
+    int mid = (int)((start + end) / 2); // using the floor of the division
+    Record *record_at_mid = data_block_read_record(block_start, block_header, index_array, metadata, mid);
+    if (!record_at_mid) return DATA_BLOCK_SEARCH_ERROR;
+
+    int record_key_at_mid = record_get_key(&(metadata->schema), record_at_mid);
+    if (record_key_at_mid == new_key) { // key already exists
+        free(record_at_mid);
+        return -1;
+    }
+    else if (record_key_at_mid > new_key) {
+        free(record_at_mid);
+        return data_block_binary_search_insert_pos(block_start, block_header, index_array, metadata, start, mid - 1, new_key);
+    }
+    else {
+        free(record_at_mid);
+        return data_block_binary_search_insert_pos(block_start, block_header, index_array, metadata, mid + 1, end, new_key);
+    }
+}
+
+int data_block_search_insert_pos(char *block_start, DataNodeHeader *block_header, int *index_array, BPlusMeta *metadata, int new_key)
+{
+    return data_block_binary_search_insert_pos(block_start, block_header, index_array, metadata,
+                                               0, block_header->record_count - 1, new_key);
+}
