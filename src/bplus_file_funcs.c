@@ -15,6 +15,14 @@
         }                         \
     }
 
+#define SAFE_CALL(call, ctx)\
+    {\
+        if (call == -1) {\
+            cleanup_context(&ctx);\
+            return -1;\
+        }\
+    }
+
 const char BF_MAGIC_NUM[4] = { 0x80, 0xAA, 'B', 'P' }; // this identifies the file format
 
 // helper functions (not defined in bplus_file_funcs.h)
@@ -28,13 +36,16 @@ int tree_search_data_block(int root_index, int key, int file_desc, BF_Block *fou
     CALL_BF(BF_GetBlock(file_desc, root_index, found_block));
     char *block_start = BF_Block_GetData(found_block);
 
-    // if block is a data block, then it is found
+    // if block is a data block, then it is found (remains pinned)
     if (is_data_block(block_start))
         return 0;
 
     // else it is an index block and must be searched
     IndexNodeHeader *block_header = index_block_read_header(block_start); // getting the header
-    if (!block_header) return -1;
+    if (!block_header) {
+        CALL_BF(BF_UnpinBlock(found_block));
+        return -1;
+    }
 
     // determining the new_root_index to follow
     int new_root_index;
@@ -59,8 +70,8 @@ int tree_search_data_block(int root_index, int key, int file_desc, BF_Block *fou
     }
 
     // continuing the search in new_root_index
-    tree_search_data_block(new_root_index, key, file_desc, found_block);
-    return 0;
+    CALL_BF(BF_UnpinBlock(found_block));
+    return tree_search_data_block(new_root_index, key, file_desc, found_block);
 }
 
 // bplus functions
@@ -173,11 +184,37 @@ struct context {
     BF_Block *header_block;
     char *header_block_start;
     BPlusMeta *internal_metadata;
+
     int inserted_key;
     int inserted_block_index;
+
     BF_Block *found_block;
     char *found_block_start;
+    DataNodeHeader *found_block_header;
+    int *found_block_index_array;
+    int found_block_insert_pos;
+
+
 };
+
+void cleanup_context(struct context *ctx)
+{
+    // setting dirty, unpinning and destroying (conditionally)
+    if (ctx->header_block) {
+        BF_Block_SetDirty(ctx->header_block);
+        BF_UnpinBlock(ctx->header_block);
+        BF_Block_Destroy(&(ctx->header_block));
+    }
+
+    if (ctx->found_block) {
+        BF_Block_SetDirty(ctx->found_block);
+        BF_UnpinBlock(ctx->found_block);
+        BF_Block_Destroy(&(ctx->found_block));
+    }
+    
+    // memory cleanup
+    free(ctx->internal_metadata);
+}
 
 int load_internal_metadata(struct context *ctx)
 {
@@ -255,27 +292,33 @@ int create_data_block_root(struct context *ctx)
     return 0;
 }
 
-int find_data_block_insert_pos(struct context *ctx)
+int find_matching_data_block(struct context *ctx)
 {
     // searching for the data block that could contain a record with inserted_key as PK
     BF_Block_Init(&(ctx->found_block)); // initializing the data block that the search will find
     if (tree_search_data_block(ctx->internal_metadata->root_index, ctx->inserted_key, ctx->file_desc, ctx->found_block) == -1)
         return -1;
 
-    ctx->found_block_start = BF_Block_GetData(ctx->found_block);
-
-
+    return 0;
 }
 
-int cleanup_context(struct context *ctx)
+int find_data_block_insert_pos(struct context *ctx)
 {
-    // setting dirty, unpinning and destroying
-    BF_Block_SetDirty(ctx->header_block);
-    CALL_BF(BF_UnpinBlock(ctx->header_block));
-    BF_Block_Destroy(&(ctx->header_block));
-    
-    // memory cleanup
-    free(ctx->internal_metadata);
+    ctx->found_block_start = BF_Block_GetData(ctx->found_block);
+    ctx->found_block_header = data_block_read_header(ctx->found_block_start);
+    if (!(ctx->found_block_header)) return -1;
+
+    ctx->found_block_index_array = data_block_read_index_array(ctx->found_block_start, ctx->internal_metadata);
+    if (!(ctx->found_block_index_array)) return -1;
+
+    // searching for the position that the record could be inserted at
+    ctx->found_block_insert_pos = data_block_search_insert_pos(ctx->found_block_start, ctx->found_block_header,
+                                      ctx->found_block_index_array, ctx->internal_metadata, ctx->inserted_key);
+
+    if (ctx->found_block_insert_pos == -1) // new record already exists
+        return -1;
+
+    return 0;
 }
 
 int bplus_record_insert(const int file_desc, BPlusMeta *metadata, const Record *record)
@@ -287,24 +330,29 @@ int bplus_record_insert(const int file_desc, BPlusMeta *metadata, const Record *
     ctx.metadata = metadata;
     ctx.record = record;
 
-    if (load_internal_metadata(&ctx) == -1) return -1;
-
-    // storing the inserted record key for convenience
-    int inserted_key = record_get_key(&(ctx.internal_metadata->schema), record);
+    // getting the internal B+ tree metadata
+    SAFE_CALL(load_internal_metadata(&ctx), ctx);
+    int inserted_key = record_get_key(&(ctx.internal_metadata->schema), record); // for convenience
 
     // checking if there is a root
-    if (ctx.internal_metadata->root_index == -1) {
-        // there is no root yet
-        if (create_data_block_root(&ctx) == -1) return -1;
+    if (ctx.internal_metadata->root_index == -1) // there is no root yet
+        SAFE_CALL(create_data_block_root(&ctx), ctx);
 
+    // else there is a root
+    /*
+    // find the data block that can contain the inserted_key
+    SAFE_CALL(find_matching_data_block(&ctx), ctx);
+
+    // find the hypothetical insert position for the new record in the matching data block, even if it doesn't have free space
+    SAFE_CALL(find_data_block_insert_pos(&ctx), ctx);
+
+    // checking if the matching data block actually has free space
+    if (data_block_has_available_space(ctx.found_block_header, ctx.internal_metadata)) {
         
     }
 
-    // else there is a root
-    // find the hypothetical insert position for the new record in the matching data block, even if it doesn't fit
-    if (find_data_block_insert_pos(&ctx) == -1) return -1;
-
-    return ctx.inserted_block_index;
+    cleanup_context(&ctx);
+    return ctx.inserted_block_index;*/
 }
 
 int bplus_record_find(const int file_desc, const BPlusMeta *metadata, const int key, Record **out_record) {
