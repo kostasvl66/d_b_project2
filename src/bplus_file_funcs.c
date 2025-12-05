@@ -99,8 +99,8 @@ int bplus_create_file(const TableSchema *schema, const char *fileName)
     header_temp->block_count = 1; // including header_block
     header_temp->record_count = 0;
     memcpy(&(header_temp->schema), schema, sizeof(TableSchema));
-    header_temp->max_records_per_block = (int)((BF_BLOCK_SIZE - sizeof(DataNodeHeader)) / (schema->record_size + sizeof(int)));
-    header_temp->max_indexes_per_block = 1 + (int)((BF_BLOCK_SIZE - sizeof(IndexNodeHeader) - sizeof(int)) / sizeof(IndexNodeEntry));
+    header_temp->max_records_per_block = (int)((BF_BLOCK_SIZE - sizeof(DataNodeHeader) - sizeof(int)) / (sizeof(Record) + sizeof(int)));
+    header_temp->max_indexes_per_block = 1 + (int)((BF_BLOCK_SIZE - sizeof(IndexNodeHeader) - 2 * sizeof(int)) / sizeof(IndexNodeEntry));
     header_temp->root_index = -1; // this means that the B+ tree has currenty no root
 
     memcpy(BF_Block_GetData(header_block), header_temp, sizeof(BPlusMeta)); // memcpy to avoid unaligned address problems
@@ -322,6 +322,42 @@ int find_data_block_insert_pos(struct context *ctx)
     return 0;
 }
 
+int insert_record_to_data_block(struct context *ctx)
+{
+    ctx->found_block_header->record_count++;
+    ctx->internal_metadata->record_count++;
+    memcpy(ctx->metadata, ctx->internal_metadata, sizeof(BPlusMeta)); // updating external metadata
+
+    // first writing to the end of the heap
+    int heap_append_pos = ctx->found_block_header->record_count - 1;
+    if (data_block_write_unordered_record(ctx->found_block_start, ctx->internal_metadata,
+            heap_append_pos, ctx->record) == -1
+    ) return -1;
+
+    // shifting the indexes of index array starting from position found_block_insert_pos, to make space for the new index
+    memmove(
+        &(ctx->found_block_index_array[ctx->found_block_insert_pos + 1]),
+        &(ctx->found_block_index_array[ctx->found_block_insert_pos]),
+        (ctx->found_block_header->record_count - 1 - ctx->found_block_insert_pos) * sizeof(int)
+    );
+
+    // setting index array's new free position to hold the new record's heap_append_pos
+    ctx->found_block_index_array[ctx->found_block_insert_pos] = heap_append_pos;
+
+    // if the new record's key is smaller than block's min key, it must be updated
+    if (ctx->inserted_key < ctx->found_block_header->min_record_key) {
+        ctx->found_block_header->min_record_key = ctx->inserted_key;
+        
+        // TODO min update for all parents
+    }
+
+    // writing the header and index array back to the block
+    data_block_write_header(ctx->found_block_start, ctx->found_block_header);
+    data_block_write_index_array(ctx->found_block_start, ctx->internal_metadata, ctx->found_block_index_array);
+
+    return 0;
+}
+
 int bplus_record_insert(const int file_desc, BPlusMeta *metadata, const Record *record)
 {   
     struct context ctx = { 0 }; // all members are initialized to 0 (pointers to NULL)
@@ -333,14 +369,17 @@ int bplus_record_insert(const int file_desc, BPlusMeta *metadata, const Record *
 
     // getting the internal B+ tree metadata
     SAFE_CALL(load_internal_metadata(&ctx), ctx);
-    int inserted_key = record_get_key(&(ctx.internal_metadata->schema), record); // for convenience
+    ctx.inserted_key = record_get_key(&(ctx.internal_metadata->schema), record); // for convenience
 
     // checking if there is a root
-    if (ctx.internal_metadata->root_index == -1) // there is no root yet
+    if (ctx.internal_metadata->root_index == -1) { // there is no root yet
         SAFE_CALL(create_data_block_root(&ctx), ctx);
-
+        cleanup_context(&ctx);
+        return ctx.inserted_block_index;
+    }
+    
     // else there is a root
-    /*
+    
     // find the data block that can contain the inserted_key
     SAFE_CALL(find_matching_data_block(&ctx), ctx);
 
@@ -349,11 +388,19 @@ int bplus_record_insert(const int file_desc, BPlusMeta *metadata, const Record *
 
     // checking if the matching data block actually has free space
     if (data_block_has_available_space(ctx.found_block_header, ctx.internal_metadata)) {
-        
+        // inserting the record to the data block
+        SAFE_CALL(insert_record_to_data_block(&ctx), ctx);
+        cleanup_context(&ctx);
+        return ctx.inserted_block_index;
     }
 
+    // else the data block has no free space
+
+
+
+
     cleanup_context(&ctx);
-    return ctx.inserted_block_index;*/
+    return ctx.inserted_block_index;
 }
 
 int bplus_record_find(const int file_desc, const BPlusMeta *metadata, const int key, Record **out_record) {
