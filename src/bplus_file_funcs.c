@@ -60,6 +60,7 @@ int tree_search_data_block(int root_index, int key, int file_desc, BF_Block *fou
         // continue in the entry index at the given position
         IndexNodeEntry *entry = index_block_read_entry(block_start, block_header, position);
         if (!entry) {
+            CALL_BF(BF_UnpinBlock(found_block));
             free(block_header);
             return -1;
         }
