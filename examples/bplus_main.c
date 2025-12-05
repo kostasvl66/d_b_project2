@@ -5,7 +5,7 @@
 #include "bplus_file_funcs.h"
 #include "record_generator.h"
 
-#define RECORDS_NUM 200 // Number of random records to insert & search
+#define RECORDS_NUM 1 // Number of random records to insert & search
 
 // Macro to handle BF library errors
 #define CALL_OR_DIE(call)     \
@@ -27,6 +27,11 @@ void search_records(TableSchema schema,
                     char* file_name);
 
 int main() {
+  const TableSchema employee_schema = employee_get_schema();
+  insert_records(employee_schema, employee_random_record, "employees.db");
+
+  return 0;
+/*
   // ===== Employee test =====
   const TableSchema employee_schema = employee_get_schema();
   insert_records(employee_schema, employee_random_record, "employees.db");
@@ -37,7 +42,7 @@ int main() {
   insert_records(student_schema, student_random_record, "students.db");
   search_records(student_schema, student_random_record, "students.db");
 
-  return 0;
+  return 0;*/
 }
 
 /**

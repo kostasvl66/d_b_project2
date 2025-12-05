@@ -13,7 +13,7 @@
         }                         \
     }
 
-int is_index_block(char *block_start)
+int is_index_block(const char *block_start)
 {
     int block_type;
     memcpy(&block_type, block_start, sizeof(int));
@@ -26,9 +26,9 @@ void set_index_block(char *block_start)
     memcpy(block_start, &block_type_index, sizeof(int));
 }
 
-void index_block_print(char *block_start, BPlusMeta* metadata)
+void index_block_print(const char *block_start, const BPlusMeta* metadata)
 {
-    char *block_ptr = block_start; // block_ptr will be moving forward
+    const char *block_ptr = block_start; // block_ptr will be moving forward
 
     int block_type;
     memcpy(&block_type, block_ptr, sizeof(int));
@@ -71,9 +71,9 @@ void index_block_print(char *block_start, BPlusMeta* metadata)
     printf("\n");
 }
 
-IndexNodeHeader *index_block_read_header(char *block_start)
+IndexNodeHeader *index_block_read_header(const char *block_start)
 {
-    char *target_start = block_start + sizeof(int);
+    const char *target_start = block_start + sizeof(int);
 
     IndexNodeHeader *result = malloc(sizeof(IndexNodeHeader));
     if (!result) return NULL;
@@ -82,23 +82,23 @@ IndexNodeHeader *index_block_read_header(char *block_start)
     return result;
 }
 
-int index_block_read_leftmost_index(char *block_start)
+int index_block_read_leftmost_index(const char *block_start)
 {
-    char *target_start = block_start + sizeof(int) + sizeof(IndexNodeHeader);
+    const char *target_start = block_start + sizeof(int) + sizeof(IndexNodeHeader);
 
     int result;
     memcpy(&result, target_start, sizeof(int));
     return result;
 }
 
-IndexNodeEntry *index_block_read_entry(char *block_start, IndexNodeHeader *block_header, int index)
+IndexNodeEntry *index_block_read_entry(const char *block_start, const IndexNodeHeader *block_header, int index)
 {
     int entry_count = block_header->index_count - 1; // leftmost index is not considered an entry
     if (index >= entry_count)
         return NULL;
 
-    char *entry0_start = block_start + sizeof(int) + sizeof(IndexNodeHeader) + sizeof(int);
-    char *target_start = entry0_start + index * sizeof(IndexNodeEntry);
+    const char *entry0_start = block_start + sizeof(int) + sizeof(IndexNodeHeader) + sizeof(int);
+    const char *target_start = entry0_start + index * sizeof(IndexNodeEntry);
 
     IndexNodeEntry *result = malloc(sizeof(IndexNodeEntry));
     if (!result) return NULL;
@@ -107,10 +107,10 @@ IndexNodeEntry *index_block_read_entry(char *block_start, IndexNodeHeader *block
     return result;
 }
 
-void index_block_read_entries_as_array(char *block_start, IndexNodeHeader *block_header, IndexNodeEntry *entry_array)
+void index_block_read_entries_as_array(const char *block_start, const IndexNodeHeader *block_header, IndexNodeEntry *entry_array)
 {
-    char *leftmost_index_start = block_start + sizeof(int) + sizeof(IndexNodeHeader);
-    char *entry1_start = leftmost_index_start + sizeof(int) + sizeof(IndexNodeEntry);
+    const char *leftmost_index_start = block_start + sizeof(int) + sizeof(IndexNodeHeader);
+    const char *entry1_start = leftmost_index_start + sizeof(int) + sizeof(IndexNodeEntry);
 
     // entry_array[0] corresponds to the block's leftmost index
     entry_array[0].key = block_header->min_record_key;
@@ -120,12 +120,12 @@ void index_block_read_entries_as_array(char *block_start, IndexNodeHeader *block
     memcpy(entry_array + sizeof(IndexNodeEntry), entry1_start, (block_header->index_count - 1) * sizeof(IndexNodeEntry));
 }
 
-int index_block_has_available_space(IndexNodeHeader *block_header, BPlusMeta *metadata)
+int index_block_has_available_space(const IndexNodeHeader *block_header, const BPlusMeta *metadata)
 {
     return (block_header->index_count < metadata->max_indexes_per_block);
 }
 
-void index_block_write_header(char *block_start, IndexNodeHeader *header)
+void index_block_write_header(char *block_start, const IndexNodeHeader *header)
 {
     char *target_start = block_start + sizeof(int);
     memcpy(target_start, header, sizeof(IndexNodeHeader));
@@ -137,7 +137,8 @@ void index_block_write_leftmost_index(char *block_start, int leftmost_index)
     memcpy(target_start, &leftmost_index, sizeof(int));
 }
 
-void index_block_write_array_as_entries(char *block_start, IndexNodeHeader *block_header, IndexNodeEntry *entry_array, int count)
+void index_block_write_array_as_entries(char *block_start, IndexNodeHeader *block_header,
+                                        const IndexNodeEntry *entry_array, int count)
 {
     if (count < 1) return;
 
@@ -154,7 +155,7 @@ void index_block_write_array_as_entries(char *block_start, IndexNodeHeader *bloc
 
 // internal binary search to use inside index_block_search_insert_pos(); both start and end are inclusive
 // returns the same as index_block_search_insert_pos()
-int index_block_binary_search_insert_pos(char *block_start, IndexNodeHeader *block_header, int start, int end, int new_key)
+int index_block_binary_search_insert_pos(const char *block_start, const IndexNodeHeader *block_header, int start, int end, int new_key)
 {
     if (start > end) // new entry goes in start
         return start; 
@@ -198,14 +199,14 @@ int index_block_binary_search_insert_pos(char *block_start, IndexNodeHeader *blo
     }
 }
 
-int index_block_search_insert_pos(char *block_start, IndexNodeHeader *block_header, int new_key)
+int index_block_search_insert_pos(const char *block_start, const IndexNodeHeader *block_header, int new_key)
 {
     return index_block_binary_search_insert_pos(block_start, block_header, 0, block_header->index_count - 1, new_key);
 }
 
 // internal binary search to use inside index_block_key_search(); both start and end are inclusive
 // returns the same as index_block_key_search()
-int index_block_key_binary_search(char *block_start, IndexNodeHeader *block_header, int start, int end, int key)
+int index_block_key_binary_search(const char *block_start, const IndexNodeHeader *block_header, int start, int end, int key)
 {
     if (start > end) // key is in leftmost index
         return -1;
@@ -247,7 +248,7 @@ int index_block_key_binary_search(char *block_start, IndexNodeHeader *block_head
     }
 }
 
-int index_block_key_search(char *block_start, IndexNodeHeader *block_header, int key)
+int index_block_key_search(const char *block_start, const IndexNodeHeader *block_header, int key)
 {
     int current_entry_count = block_header->index_count - 1;
     return index_block_key_binary_search(block_start, block_header, 0, current_entry_count - 1, key);

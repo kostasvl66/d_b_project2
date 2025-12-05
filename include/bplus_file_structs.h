@@ -11,9 +11,6 @@
 #include <string.h>
 
 #include "bf.h"
-#include "bplus_datanode.h"
-#include "bplus_file_structs.h"
-#include "bplus_index_node.h"
 #include "record.h"
 
 /* The structure of a B+ Tree file is the following:
@@ -27,7 +24,7 @@
 ** first block has not enough space, does an index block appear as its parent and new root
 */
 
-typedef struct {
+typedef struct BPlusMeta {
     char magic_num[4]; // identifies the file format
     int block_count; // total number of blocks in the file
     int record_count; // total number of records in the file

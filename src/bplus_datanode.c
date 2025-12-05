@@ -13,7 +13,7 @@
         }                         \
     }
 
-int is_data_block(char *block_start)
+int is_data_block(const char *block_start)
 {
     int block_type;
     memcpy(&block_type, block_start, sizeof(int));
@@ -26,9 +26,9 @@ void set_data_block(char *block_start)
     memcpy(block_start, &block_type_data, sizeof(int));
 }
 
-void data_block_print(char *block_start, BPlusMeta* metadata)
+void data_block_print(const char *block_start, const BPlusMeta *metadata)
 {
-    char *block_ptr = block_start; // block_ptr will be moving forward
+    const char *block_ptr = block_start; // block_ptr will be moving forward
 
     int block_type;
     memcpy(&block_type, block_ptr, sizeof(int));
@@ -77,9 +77,9 @@ void data_block_print(char *block_start, BPlusMeta* metadata)
     printf("\n");
 }
 
-DataNodeHeader *data_block_read_header(char *block_start)
+DataNodeHeader *data_block_read_header(const char *block_start)
 {
-    char *target_start = block_start + sizeof(int);
+    const char *target_start = block_start + sizeof(int);
 
     DataNodeHeader *result = malloc(sizeof(DataNodeHeader));
     if (!result) return NULL;
@@ -88,9 +88,9 @@ DataNodeHeader *data_block_read_header(char *block_start)
     return result;
 }
 
-int *data_block_read_index_array(char *block_start, BPlusMeta *metadata)
+int *data_block_read_index_array(const char *block_start, const BPlusMeta *metadata)
 {
-    char *target_start = block_start + sizeof(int) + sizeof(DataNodeHeader);
+    const char *target_start = block_start + sizeof(int) + sizeof(DataNodeHeader);
 
     int *result = malloc(metadata->max_records_per_block * sizeof(int));
     if (!result) return NULL;
@@ -99,14 +99,14 @@ int *data_block_read_index_array(char *block_start, BPlusMeta *metadata)
     return result;
 }
 
-Record *data_block_read_unordered_record(char *block_start, BPlusMeta *metadata, int index)
+Record *data_block_read_unordered_record(const char *block_start, const BPlusMeta *metadata, int index)
 {
     if (index >= metadata->max_records_per_block)
         return NULL;
 
     int index_array_length = metadata->max_records_per_block;
-    char *record0_start = block_start + sizeof(int) + sizeof(DataNodeHeader) + index_array_length * sizeof(int);
-    char *target_start = record0_start + index * sizeof(Record);
+    const char *record0_start = block_start + sizeof(int) + sizeof(DataNodeHeader) + index_array_length * sizeof(int);
+    const char *target_start = record0_start + index * sizeof(Record);
 
     Record *result = malloc(sizeof(Record));
     if (!result) return NULL;
@@ -115,17 +115,18 @@ Record *data_block_read_unordered_record(char *block_start, BPlusMeta *metadata,
     return result;
 }
 
-Record *data_block_read_record(char *block_start, DataNodeHeader *block_header, int *index_array, BPlusMeta *metadata, int index)
+Record *data_block_read_record(const char *block_start, const DataNodeHeader *block_header, const int *index_array,
+                               const BPlusMeta *metadata, int index)
 {
     if (index >= block_header->record_count)
         return NULL;
 
     int index_array_length = metadata->max_records_per_block;
-    char *record0_start = block_start + sizeof(int) + sizeof(DataNodeHeader) + index_array_length * sizeof(int);
+    const char *record0_start = block_start + sizeof(int) + sizeof(DataNodeHeader) + index_array_length * sizeof(int);
 
     // index of record in the unsorted "heap" of records
     int heap_index = index_array[index];
-    char *target_start = record0_start + heap_index * sizeof(Record);
+    const char *target_start = record0_start + heap_index * sizeof(Record);
 
     Record *result = malloc(sizeof(Record));
     if (!result) return NULL;
@@ -134,32 +135,33 @@ Record *data_block_read_record(char *block_start, DataNodeHeader *block_header, 
     return result;
 }
 
-void data_block_read_heap_as_array(char *block_start, DataNodeHeader *block_header, BPlusMeta *metadata, Record *record_array)
+void data_block_read_heap_as_array(const char *block_start, const DataNodeHeader *block_header,
+                                   const BPlusMeta *metadata, Record *record_array)
 {
     int index_array_length = metadata->max_records_per_block;
-    char *record0_start = block_start + sizeof(int) + sizeof(DataNodeHeader) + index_array_length * sizeof(int);
+    const char *record0_start = block_start + sizeof(int) + sizeof(DataNodeHeader) + index_array_length * sizeof(int);
 
     memcpy(record_array, record0_start, block_header->record_count * sizeof(Record));
 }
 
-int data_block_has_available_space(DataNodeHeader *block_header, BPlusMeta *metadata)
+int data_block_has_available_space(const DataNodeHeader *block_header, const BPlusMeta *metadata)
 {
     return (block_header->record_count < metadata->max_records_per_block);
 }
 
-void data_block_write_header(char *block_start, DataNodeHeader *header)
+void data_block_write_header(char *block_start, const DataNodeHeader *header)
 {
     char *target_start = block_start + sizeof(int);
     memcpy(target_start, header, sizeof(DataNodeHeader));
 }
 
-void data_block_write_index_array(char *block_start, BPlusMeta *metadata, int *index_array)
+void data_block_write_index_array(char *block_start, const BPlusMeta *metadata, const int *index_array)
 {
     char *target_start = block_start + sizeof(int) + sizeof(DataNodeHeader);
     memcpy(target_start, index_array, metadata->max_records_per_block * sizeof(int));
 }
 
-int data_block_write_unordered_record(char *block_start, BPlusMeta *metadata, int index, Record *record)
+int data_block_write_unordered_record(char *block_start, const BPlusMeta *metadata, int index, const Record *record)
 {
     if (index >= metadata->max_records_per_block)
         return -1;
@@ -174,8 +176,8 @@ int data_block_write_unordered_record(char *block_start, BPlusMeta *metadata, in
 
 // internal binary search to use inside data_block_search_insert_pos(); both start and end are inclusive
 // returns the same as data_block_search_insert_pos()
-int data_block_binary_search_insert_pos(char *block_start, DataNodeHeader *block_header, int *index_array, BPlusMeta *metadata,
-                                        int start, int end, int new_key)
+int data_block_binary_search_insert_pos(const char *block_start, const DataNodeHeader *block_header, const int *index_array,
+                                        const BPlusMeta *metadata, int start, int end, int new_key)
 {
     if (start > end) // new record goes in the start
         return start; 
@@ -221,7 +223,8 @@ int data_block_binary_search_insert_pos(char *block_start, DataNodeHeader *block
     }
 }
 
-int data_block_search_insert_pos(char *block_start, DataNodeHeader *block_header, int *index_array, BPlusMeta *metadata, int new_key)
+int data_block_search_insert_pos(const char *block_start, const DataNodeHeader *block_header, const int *index_array,
+                                 const BPlusMeta *metadata, int new_key)
 {
     return data_block_binary_search_insert_pos(block_start, block_header, index_array, metadata,
                                                0, block_header->record_count - 1, new_key);

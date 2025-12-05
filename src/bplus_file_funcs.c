@@ -179,7 +179,7 @@ struct context {
     // bplus_record_insert arguments
     int file_desc;
     BPlusMeta *metadata;
-    Record *record;
+    const Record *record;
 
     // variables
     BF_Block *header_block;
