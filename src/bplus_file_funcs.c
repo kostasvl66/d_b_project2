@@ -19,14 +19,14 @@ const char BF_MAGIC_NUM[4] = { 0x80, 0xAA, 'B', 'P' }; // this identifies the fi
 
 // helper functions (not defined in bplus_file_funcs.h)
 
-// starting from the root block (with root_index), searches the data block that contains a record with key as PK
-// block must be already initialized, and gets the found block's handle
+// starting from the root block (with root_index), searches for the data block that could contain a record with key as PK
+// found_block must be already initialized, and gets the found block's handle
 // returns 0 on success, -1 otherwise
-int tree_search_data_block(int root_index, int key, int file_desc, BF_Block *block)
+int tree_search_data_block(int root_index, int key, int file_desc, BF_Block *found_block)
 {
     // getting the root block and its data
-    CALL_BF(BF_GetBlock(file_desc, root_index, block));
-    char *block_start = BF_Block_GetData(block);
+    CALL_BF(BF_GetBlock(file_desc, root_index, found_block));
+    char *block_start = BF_Block_GetData(found_block);
 
     // if block is a data block, then it is found
     if (is_data_block(block_start))
@@ -59,7 +59,7 @@ int tree_search_data_block(int root_index, int key, int file_desc, BF_Block *blo
     }
 
     // continuing the search in new_root_index
-    tree_search_data_block(new_root_index, key, file_desc, block);
+    tree_search_data_block(new_root_index, key, file_desc, found_block);
     return 0;
 }
 
@@ -89,18 +89,19 @@ int bplus_create_file(const TableSchema *schema, const char *fileName)
     memcpy(&(header_temp->schema), schema, sizeof(TableSchema));
     header_temp->max_records_per_block = (int)((BF_BLOCK_SIZE - sizeof(DataNodeHeader)) / (schema->record_size + sizeof(int)));
     header_temp->max_indexes_per_block = 1 + (int)((BF_BLOCK_SIZE - sizeof(IndexNodeHeader) - sizeof(int)) / sizeof(IndexNodeEntry));
+    header_temp->root_index = -1; // this means that the B+ tree has currenty no root
 
     memcpy(BF_Block_GetData(header_block), header_temp, sizeof(BPlusMeta)); // memcpy to avoid unaligned address problems
     free(header_temp);
 
-    /* setting the block dirty, unpinning and destroying */
+    // setting the block dirty and unpinning
     BF_Block_SetDirty(header_block);
     CALL_BF(BF_UnpinBlock(header_block));
 
-    /* closing the file */
+    // closing the file
     BF_CloseFile(file_handle);
 
-    /* memory cleanup */
+    // memory cleanup
     BF_Block_Destroy(&header_block);
 
     return 0;
@@ -159,9 +160,151 @@ int bplus_close_file(const int file_desc, BPlusMeta *metadata) {
     return 0;
 }
 
+// helper functions specifically for bplus_record_insert
+// these that return int, always return 0 on success, -1 on failure
 
-int bplus_record_insert(const int file_desc, BPlusMeta *metadata, const Record *record) {
-    return -1;
+struct context {
+    // bplus_record_insert arguments
+    int file_desc;
+    BPlusMeta *metadata;
+    Record *record;
+
+    // variables
+    BF_Block *header_block;
+    char *header_block_start;
+    BPlusMeta *internal_metadata;
+    int inserted_key;
+    int inserted_block_index;
+    BF_Block *found_block;
+    char *found_block_start;
+};
+
+int load_internal_metadata(struct context *ctx)
+{
+    // getting block 0 and the internal_metadata
+    BF_Block_Init(&(ctx->header_block));
+
+    CALL_BF(BF_GetBlock(ctx->file_desc, 0, ctx->header_block));
+    ctx->header_block_start = BF_Block_GetData(ctx->header_block);
+    ctx->internal_metadata = malloc(sizeof(BPlusMeta));
+    if (!(ctx->internal_metadata))
+        return -1;
+
+    memcpy(ctx->internal_metadata, ctx->header_block_start, sizeof(BPlusMeta));
+    return 0;
+}
+
+int create_data_block_root(struct context *ctx)
+{
+    // there is no root, so it must be made as a data block, which will store the record directly
+    BF_Block *root_block;
+    BF_Block_Init(&root_block);
+
+    // allocating the new block
+    CALL_BF(BF_AllocateBlock(ctx->file_desc, root_block));
+    char *root_block_start = BF_Block_GetData(root_block);
+
+    // updating internal_metadata
+    ctx->internal_metadata->block_count++;
+    ctx->internal_metadata->record_count++;
+    ctx->internal_metadata->root_index = ctx->internal_metadata->block_count - 1;
+    memcpy(ctx->header_block_start, ctx->internal_metadata, sizeof(BPlusMeta));
+    memcpy(ctx->metadata, ctx->internal_metadata, sizeof(BPlusMeta)); // updating the external metadata
+
+    // storing the value to return
+    ctx->inserted_block_index = ctx->internal_metadata->root_index;
+
+    // writing the block's header
+    set_data_block(root_block_start);
+
+    DataNodeHeader *root_block_header = malloc(sizeof(DataNodeHeader));
+    if (!root_block_header)
+        return -1;
+    
+    root_block_header->record_count = 1;
+    root_block_header->parent_index = -1; // root has no parent
+    root_block_header->next_index = -1; // no siblings
+    root_block_header->min_record_key = ctx->inserted_key;
+
+    data_block_write_header(root_block_start, root_block_header);
+
+    // writing the block's first record (in heap and index array)
+    if (data_block_write_unordered_record(root_block_start, ctx->internal_metadata, 0, ctx->record) == -1) {
+        CALL_BF(BF_UnpinBlock(root_block));
+        BF_Block_Destroy(&root_block);
+        free(root_block_header);
+        return -1;
+    }
+
+    int *root_index_array = malloc(ctx->internal_metadata->max_records_per_block * sizeof(int));
+    if (!root_index_array) {
+        CALL_BF(BF_UnpinBlock(root_block));
+        BF_Block_Destroy(&root_block);
+        free(root_block_header);
+        return -1;
+    }
+    
+    root_index_array[0] = 0; // the first ordered record is the first in heap
+    data_block_write_index_array(root_block_start, ctx->internal_metadata, root_index_array);
+
+    BF_Block_SetDirty(root_block);
+    CALL_BF(BF_UnpinBlock(root_block));
+    BF_Block_Destroy(&root_block);
+    free(root_block_header);
+    free(root_index_array);
+    return 0;
+}
+
+int find_data_block_insert_pos(struct context *ctx)
+{
+    // searching for the data block that could contain a record with inserted_key as PK
+    BF_Block_Init(&(ctx->found_block)); // initializing the data block that the search will find
+    if (tree_search_data_block(ctx->internal_metadata->root_index, ctx->inserted_key, ctx->file_desc, ctx->found_block) == -1)
+        return -1;
+
+    ctx->found_block_start = BF_Block_GetData(ctx->found_block);
+
+
+}
+
+int cleanup_context(struct context *ctx)
+{
+    // setting dirty, unpinning and destroying
+    BF_Block_SetDirty(ctx->header_block);
+    CALL_BF(BF_UnpinBlock(ctx->header_block));
+    BF_Block_Destroy(&(ctx->header_block));
+    
+    // memory cleanup
+    free(ctx->internal_metadata);
+}
+
+int bplus_record_insert(const int file_desc, BPlusMeta *metadata, const Record *record)
+{   
+    struct context ctx = { 0 }; // all members are initialized to 0 (pointers to NULL)
+
+    // initializing argument-members of the context
+    ctx.file_desc = file_desc;
+    ctx.metadata = metadata;
+    ctx.record = record;
+
+    if (load_internal_metadata(&ctx) == -1) return -1;
+
+    // storing the inserted record key for convenience
+    int inserted_key = record_get_key(&(ctx.internal_metadata->schema), record);
+
+    // checking if there is a root
+    if (ctx.internal_metadata->root_index == -1) {
+        // there is no root yet
+        if (create_data_block_root(&ctx) == -1) return -1;
+
+        
+    }
+
+    // else there is a root
+    // find the hypothetical insert position for the new record in the matching data block, even if it doesn't fit
+    if (find_data_block_insert_pos(&ctx) == -1) return -1;
+
+    return ctx.inserted_block_index;
 }
 
 int bplus_record_find(const int file_desc, const BPlusMeta *metadata, const int key, Record **out_record) {

@@ -20,6 +20,12 @@ int is_index_block(char *block_start)
     return (block_type == BLOCK_TYPE_INDEX);
 }
 
+void set_index_block(char *block_start)
+{
+    int block_type_index = BLOCK_TYPE_INDEX;
+    memcpy(block_start, &block_type_index, sizeof(int));
+}
+
 void index_block_print(char *block_start, BPlusMeta* metadata)
 {
     char *block_ptr = block_start; // block_ptr will be moving forward

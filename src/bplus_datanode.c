@@ -20,6 +20,12 @@ int is_data_block(char *block_start)
     return (block_type == BLOCK_TYPE_DATA);
 }
 
+void set_data_block(char *block_start)
+{
+    int block_type_data = BLOCK_TYPE_DATA;
+    memcpy(block_start, &block_type_data, sizeof(int));
+}
+
 void data_block_print(char *block_start, BPlusMeta* metadata)
 {
     char *block_ptr = block_start; // block_ptr will be moving forward

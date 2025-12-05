@@ -29,6 +29,9 @@ typedef struct {
 // returns 1 if this is a data block, 0 otherwise
 int is_data_block(char *block_start);
 
+// sets the block type to data block
+void set_data_block(char *block_start);
+
 // prints a data block (requires pointer to block data)
 void data_block_print(char *block_start, BPlusMeta *metadata);
 

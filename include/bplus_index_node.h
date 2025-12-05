@@ -39,6 +39,9 @@ typedef struct {
 // returns 1 if this is an index block, 0 otherwise
 int is_index_block(char *block_start);
 
+// sets the block type to index block
+void set_index_block(char *block_start);
+
 // prints an index block (requires pointer to block data)
 void index_block_print(char *block_start, BPlusMeta* metadata);
 
