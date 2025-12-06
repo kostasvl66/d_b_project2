@@ -364,7 +364,6 @@ int create_data_block_root(struct context *ctx)
     data_block_write_index_array(root_block_start, ctx->internal_metadata, root_index_array);
 
     BF_Block_SetDirty(root_block);
-    data_block_print(root_block_start, ctx->internal_metadata);
     CALL_BF(BF_UnpinBlock(root_block));
     BF_Block_Destroy(&root_block);
     free(root_block_header);
@@ -407,7 +406,8 @@ int insert_record_to_data_block(struct context *ctx)
 {
     ctx->found_block_header->record_count++;
     ctx->internal_metadata->record_count++;
-    memcpy(ctx->metadata, ctx->internal_metadata, sizeof(BPlusMeta)); // updating external metadata
+    memcpy(ctx->header_block_start, ctx->internal_metadata, sizeof(BPlusMeta));
+    memcpy(ctx->metadata, ctx->internal_metadata, sizeof(BPlusMeta)); // updating the external metadata
 
     // first writing to the end of the heap
     int heap_append_pos = ctx->found_block_header->record_count - 1;
@@ -497,7 +497,8 @@ int create_new_data_block(struct context *ctx)
     // updating metadata
     ctx->internal_metadata->block_count++;
     ctx->internal_metadata->record_count++;
-    memcpy(ctx->metadata, ctx->internal_metadata, sizeof(BPlusMeta)); // updating external metadata
+    memcpy(ctx->header_block_start, ctx->internal_metadata, sizeof(BPlusMeta));
+    memcpy(ctx->metadata, ctx->internal_metadata, sizeof(BPlusMeta)); // updating the external metadata
 
     // calculating new_data_block_index for later
     ctx->new_data_block_index = ctx->internal_metadata->block_count - 1;
@@ -597,6 +598,66 @@ int split_content_between_data_blocks(struct context *ctx)
     return 0;
 }
 
+int create_index_block_root_above_data_blocks(struct context *ctx)
+{
+    BF_Block *root_index_block;
+    BF_Block_Init(&root_index_block);
+
+    CALL_BF(BF_AllocateBlock(ctx->file_desc, root_index_block));
+    char *root_index_block_start = BF_Block_GetData(root_index_block);
+
+    // updating internal_metadata
+    ctx->internal_metadata->block_count++;
+    ctx->internal_metadata->root_index = ctx->internal_metadata->block_count - 1;
+    memcpy(ctx->header_block_start, ctx->internal_metadata, sizeof(BPlusMeta));
+    memcpy(ctx->metadata, ctx->internal_metadata, sizeof(BPlusMeta)); // updating the external metadata
+
+    // updating the block's header
+    set_index_block(root_index_block_start);
+
+    IndexNodeHeader *root_index_block_header = malloc(sizeof(IndexNodeHeader));
+    if (!root_index_block_header) {
+        CALL_BF(BF_UnpinBlock(root_index_block));
+        BF_Block_Destroy(&root_index_block);
+        return -1;
+    }
+    
+    root_index_block_header->index_count = 2;
+    root_index_block_header->parent_index = -1; // root has no parent
+    // root_index_block_header->min_record_key is updated later **internally** by index_block_write_array_as_entries()
+
+    // assigning the entries and lefmost index
+    IndexNodeEntry entry_array[2];
+
+    entry_array[0].key = ctx->found_block_header->min_record_key; // this will become min key of root_index_block
+    entry_array[0].right_index = ctx->found_block_index; // this will become leftmost index of root_index_block
+
+    entry_array[1].key = ctx->new_data_block_header->min_record_key; // this will be the first key in root_index_block
+    entry_array[1].right_index = ctx->new_data_block_index; // this will be the index in the right of the first key
+
+    // writing back both leftmost index and entries, which is done in this one call
+    index_block_write_array_as_entries(root_index_block_start, root_index_block_header, entry_array, 2);
+
+    // writing back the header
+    index_block_write_header(root_index_block_start, root_index_block_header);
+
+    // updating the data block children to point to the new root
+    ctx->found_block_header->parent_index = ctx->internal_metadata->root_index;
+    data_block_write_header(ctx->found_block_start, ctx->found_block_header);
+
+    ctx->new_data_block_header->parent_index = ctx->internal_metadata->root_index;
+    data_block_write_header(ctx->new_data_block_start, ctx->new_data_block_header);
+
+    BF_Block_SetDirty(root_index_block);
+    data_block_print(ctx->found_block_start, ctx->internal_metadata);
+    data_block_print(ctx->new_data_block_start, ctx->internal_metadata);
+    index_block_print(root_index_block_start, ctx->internal_metadata);
+    CALL_BF(BF_UnpinBlock(root_index_block));
+    BF_Block_Destroy(&root_index_block);
+    free(root_index_block_header);
+    return 0;
+}
+
 int bplus_record_insert(const int file_desc, BPlusMeta *metadata, const Record *record)
 {   
     // this contains the "context variables" needed by this function;
@@ -632,7 +693,6 @@ int bplus_record_insert(const int file_desc, BPlusMeta *metadata, const Record *
     if (data_block_has_available_space(ctx.found_block_header, ctx.internal_metadata)) {
         // inserting the record to the data block
         SAFE_CALL(insert_record_to_data_block(&ctx), ctx);
-        data_block_print(ctx.found_block_start, ctx.internal_metadata);
         cleanup_context(&ctx);
         return ctx.inserted_block_index;
     }
@@ -648,13 +708,11 @@ int bplus_record_insert(const int file_desc, BPlusMeta *metadata, const Record *
     // update the old and new block with the new data
     SAFE_CALL(split_content_between_data_blocks(&ctx), ctx);
 
-    printf("!!! NO MORE SPACE IN FIRST BLOCK !!!\n");
-    data_block_print(ctx.found_block_start, ctx.internal_metadata);
-    data_block_print(ctx.new_data_block_start, ctx.internal_metadata);
-
     // if the old block has no parent, the first index block must be made, and it will be the new root
     if (ctx.found_block_header->parent_index == -1) {
-
+        SAFE_CALL(create_index_block_root_above_data_blocks(&ctx), ctx);
+        cleanup_context(&ctx);
+        return ctx.inserted_block_index;
     }
 
     cleanup_context(&ctx);

@@ -46,17 +46,15 @@ void index_block_print(const char *block_start, const BPlusMeta* metadata)
     printf("index_count = %d\n", header->index_count);
     printf("parent_index = %d\n", header->parent_index);
     printf("min_record_key = %d\n\n", header->min_record_key);
-    free(header);
     block_ptr += sizeof(IndexNodeHeader);
-
+    
     printf("Indexes and keys in ascending order:\n");
-
+    
     int leftmost_index;
     memcpy(&leftmost_index, block_ptr, sizeof(int));
     printf("index: %d\n", leftmost_index);
     block_ptr += sizeof(int);
-
-    for (int i = 0; i < header->index_count; i++) {
+    for (int i = 0; i < header->index_count - 1; i++) {
         IndexNodeEntry entry;
         memcpy(&entry, block_ptr, sizeof(IndexNodeEntry));
         printf("key: %d\n", entry.key);
@@ -64,7 +62,8 @@ void index_block_print(const char *block_start, const BPlusMeta* metadata)
         block_ptr += sizeof(IndexNodeEntry);
     }
     printf("\n");
-
+    free(header);
+    
     printf("Unused space: %tdB\n", BF_BLOCK_SIZE - (block_ptr - block_start));
 
     for (int i = 0; i < 20; i++) printf("-");
@@ -143,14 +142,14 @@ void index_block_write_array_as_entries(char *block_start, IndexNodeHeader *bloc
     if (count < 1) return;
 
     char *leftmost_index_start = block_start + sizeof(int) + sizeof(IndexNodeHeader);
-    char *entry1_start = leftmost_index_start + sizeof(int) + sizeof(IndexNodeEntry);
+    char *entry1_start = leftmost_index_start + sizeof(int);
 
     // entry_array[0] corresponds to the block's leftmost index
     block_header->min_record_key = entry_array[0].key;
     memcpy(leftmost_index_start, &(entry_array[0].right_index), sizeof(int));
 
     // copying the rest of the entries
-    memcpy(entry1_start, entry_array + sizeof(IndexNodeEntry), (count - 1) * sizeof(IndexNodeEntry));
+    memcpy(entry1_start, &entry_array[1], (count - 1) * sizeof(IndexNodeEntry));
 }
 
 // internal binary search to use inside index_block_search_insert_pos(); both start and end are inclusive
