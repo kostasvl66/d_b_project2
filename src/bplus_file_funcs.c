@@ -242,35 +242,35 @@ int bplus_close_file(const int file_desc, BPlusMeta *metadata) {
 // these that return int, always return 0 on success, -1 on failure
 
 struct context {
-  // bplus_record_insert arguments
-  int file_desc;
-  BPlusMeta *metadata;
-  const Record *record;
+    // bplus_record_insert arguments
+    int file_desc;
+    BPlusMeta *metadata;
+    const Record *record;
 
-  // variables
-  BF_Block *header_block;
-  char *header_block_start;
-  BPlusMeta *internal_metadata;
+    // variables
+    BF_Block *header_block;
+    char *header_block_start;
+    BPlusMeta *internal_metadata;
 
-  int inserted_key;
-  int inserted_block_index;
+    int inserted_key;
+    int inserted_block_index;
 
-  BF_Block *found_block;
-  int found_block_index;
-  char *found_block_start;
-  DataNodeHeader *found_block_header;
-  int *found_block_index_array;
-  int found_block_insert_pos;
+    BF_Block *found_block;
+    int found_block_index;
+    char *found_block_start;
+    DataNodeHeader *found_block_header;
+    int *found_block_index_array;
+    int found_block_insert_pos;
 
-  Record *temp_heap;
-  int *temp_index_array;
-  int second_half_start;
+    Record *temp_heap;
+    int *temp_index_array;
+    int second_half_start;
 
-  BF_Block *new_data_block;
-  int new_data_block_index;
-  char *new_data_block_start;
-  DataNodeHeader *new_data_block_header;
-  int *new_data_block_index_array;
+    BF_Block *new_data_block;
+    int new_data_block_index;
+    char *new_data_block_start;
+    DataNodeHeader *new_data_block_header;
+    int *new_data_block_index_array;
 };
 
 void cleanup_context(struct context *ctx) {
