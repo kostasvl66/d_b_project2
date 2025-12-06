@@ -719,7 +719,59 @@ int bplus_record_insert(const int file_desc, BPlusMeta *metadata, const Record *
     return ctx.inserted_block_index;
 }
 
-int bplus_record_find(const int file_desc, const BPlusMeta *metadata, const int key, Record **out_record) {
-    *out_record = NULL;
-    return -1;
+int bplus_record_find(const int file_desc, const BPlusMeta *metadata,
+                      const int key, Record **out_record) {
+  *out_record = NULL;
+
+  BPlusMeta *tree_info;
+  BF_Block *info_block;
+
+  // Receiving B+_Tree File metadata
+  BF_Block_Init(&info_block);
+  CALL_BF(BF_GetBlock(file_desc, 0, info_block));
+
+  tree_info = malloc(sizeof(BPlusMeta));
+  char *tree_info_start = BF_Block_GetData(info_block);
+  memcpy(tree_info, tree_info_start, sizeof(BPlusMeta));
+
+  // Receiving the block index of the root from the metadata header
+  int root_pos = tree_info->root_index;
+
+  // Receiving data block which potentially contains the key being searched
+  BF_Block *res_block;
+  BF_Block_Init(&res_block);
+  int *block_index = malloc(sizeof(int));
+  tree_search_data_block(root_pos, key, file_desc, res_block, block_index);
+
+  char *data_block_start = BF_Block_GetData(res_block);
+
+  DataNodeHeader *data_block_header = data_block_read_header(data_block_start);
+
+  int number_of_records = data_block_header->record_count;
+
+  int *indices = malloc(number_of_records * sizeof(int));
+  indices = data_block_read_index_array(data_block_start, tree_info);
+
+  Record *rec = malloc(sizeof(Record));
+
+  for (int i = 0; i < number_of_records; i++) {
+    rec = data_block_read_record(data_block_start, data_block_header, indices,
+                                 tree_info, i);
+    int pk = record_get_key(&tree_info->schema, rec);
+    if (pk == key) {
+      *out_record = rec;
+      return 0;
+    } else {
+      return -1;
+    }
+  }
+
+  // printf("printing record:");
+  // record_print(&tree_info->schema, rec);
+
+  BF_UnpinBlock(info_block);
+  BF_UnpinBlock(res_block);
+  free(indices);
+
+  return -1;
 }
