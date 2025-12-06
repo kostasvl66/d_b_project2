@@ -28,7 +28,7 @@ void set_data_block(char *block_start)
 
 void data_block_print(const char *block_start, const BPlusMeta *metadata)
 {
-    const char *block_ptr = block_start; // block_ptr will be moving forward
+    char *block_ptr = (char *)block_start; // block_ptr will be moving forward
 
     int block_type;
     memcpy(&block_type, block_ptr, sizeof(int));
@@ -47,32 +47,32 @@ void data_block_print(const char *block_start, const BPlusMeta *metadata)
     printf("parent_index = %d\n", header->parent_index);
     printf("next_index = %d\n\n", header->next_index);
     printf("min_record_key = %d\n\n", header->min_record_key);
-    free(header);
     block_ptr += sizeof(DataNodeHeader);
-
+    
     int *index_array = malloc(metadata->max_records_per_block * sizeof(int));
     memcpy(index_array, block_ptr, metadata->max_records_per_block * sizeof(int));
     printf("Index array: ");
     for (int i = 0; i < metadata->max_records_per_block; i++)
-        printf("%d, ", index_array[i]);
+    printf("%d, ", index_array[i]);
     printf("\n\n");
     free(index_array);
-    block_ptr += sizeof(metadata->max_records_per_block * sizeof(int));
-
+    printf("pointer in print: %p\n", block_ptr);
+    block_ptr += metadata->max_records_per_block * sizeof(int);
+    
     printf("Records:\n");
     for (int i = 0; i < header->record_count; i++) {
         Record *rec = malloc(sizeof(Record));
         memcpy(rec, block_ptr, sizeof(Record));
         printf("%d -> ", i);
-        record_print(&metadata->schema, rec);
-        printf("\n");
+        record_print(&(metadata->schema), rec);
         free(rec);
         block_ptr += sizeof(Record);
     }
     printf("\n");
+    free(header);
     
     printf("Unused space: %tdB\n", BF_BLOCK_SIZE - (block_ptr - block_start));
-
+    
     for (int i = 0; i < 20; i++) printf("-");
     printf("\n");
 }

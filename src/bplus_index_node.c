@@ -28,7 +28,7 @@ void set_index_block(char *block_start)
 
 void index_block_print(const char *block_start, const BPlusMeta* metadata)
 {
-    const char *block_ptr = block_start; // block_ptr will be moving forward
+    char *block_ptr = (char *)block_start; // block_ptr will be moving forward
 
     int block_type;
     memcpy(&block_type, block_ptr, sizeof(int));

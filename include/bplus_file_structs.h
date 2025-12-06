@@ -24,7 +24,7 @@
 ** first block has not enough space, does an index block appear as its parent and new root
 */
 
-typedef struct BPlusMeta {
+typedef struct {
     char magic_num[4]; // identifies the file format
     int block_count; // total number of blocks in the file
     int record_count; // total number of records in the file
