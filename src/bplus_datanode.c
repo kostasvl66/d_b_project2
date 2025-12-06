@@ -56,7 +56,6 @@ void data_block_print(const char *block_start, const BPlusMeta *metadata)
     printf("%d, ", index_array[i]);
     printf("\n\n");
     free(index_array);
-    printf("pointer in print: %p\n", block_ptr);
     block_ptr += metadata->max_records_per_block * sizeof(int);
     
     printf("Records:\n");
