@@ -253,11 +253,6 @@ struct context {
     char *new_data_block_start;
     DataNodeHeader *new_data_block_header;
     int *new_data_block_index_array;
-
-    int first_block_index;
-    int first_block_min;
-    int second_block_index;
-    int second_block_min;
 };
 
 void cleanup_context(struct context *ctx)
@@ -596,6 +591,8 @@ int split_content_between_data_blocks(struct context *ctx)
     // freeing temp_heap and temp_index_array because they have no more use
     free(ctx->temp_heap);
     free(ctx->temp_index_array);
+    ctx->temp_heap = NULL;
+    ctx->temp_index_array = NULL;
 
     return 0;
 }
@@ -654,6 +651,11 @@ int bplus_record_insert(const int file_desc, BPlusMeta *metadata, const Record *
     printf("!!! NO MORE SPACE IN FIRST BLOCK !!!\n");
     data_block_print(ctx.found_block_start, ctx.internal_metadata);
     data_block_print(ctx.new_data_block_start, ctx.internal_metadata);
+
+    // if the old block has no parent, the first index block must be made, and it will be the new root
+    if (ctx.found_block_header->parent_index == -1) {
+
+    }
 
     cleanup_context(&ctx);
     return ctx.inserted_block_index;
