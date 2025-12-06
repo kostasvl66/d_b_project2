@@ -271,11 +271,6 @@ struct context {
   char *new_data_block_start;
   DataNodeHeader *new_data_block_header;
   int *new_data_block_index_array;
-
-  int first_block_index;
-  int first_block_min;
-  int second_block_index;
-  int second_block_min;
 };
 
 void cleanup_context(struct context *ctx) {
@@ -313,6 +308,9 @@ void cleanup_context(struct context *ctx) {
 
   free(ctx->temp_heap);
   free(ctx->temp_index_array);
+
+  ctx->temp_heap = NULL;
+  ctx->temp_index_array = NULL;
 
   free(ctx->new_data_block_header);
   free(ctx->new_data_block_index_array);
@@ -723,6 +721,11 @@ int bplus_record_insert(const int file_desc, BPlusMeta *metadata,
   data_block_print(ctx.found_block_start, ctx.internal_metadata);
   data_block_print(ctx.new_data_block_start, ctx.internal_metadata);
 
+  // if the old block has no parent, the first index block must be made, and it
+  // will be the new root
+  if (ctx.found_block_header->parent_index == -1) {
+  }
+
   cleanup_context(&ctx);
   return ctx.inserted_block_index;
 }
@@ -745,10 +748,10 @@ int bplus_record_find(const int file_desc, const BPlusMeta *metadata,
   // Receiving the block index of the root from the metadata header
   int root_pos = tree_info->root_index;
 
-  // Receiving data block which potentially contains the key being searched for
+  // Receiving data block which potentially contains the key being searched
   BF_Block *res_block;
   BF_Block_Init(&res_block);
-  int *block_index = NULL;
+  int *block_index = malloc(sizeof(int));
   tree_search_data_block(root_pos, key, file_desc, res_block, block_index);
 
   char *data_block_start = BF_Block_GetData(res_block);
@@ -757,18 +760,29 @@ int bplus_record_find(const int file_desc, const BPlusMeta *metadata,
 
   int number_of_records = data_block_header->record_count;
 
-  int *indices = data_block_read_index_array(data_block_start, tree_info);
+  int *indices = malloc(number_of_records * sizeof(int));
+  indices = data_block_read_index_array(data_block_start, tree_info);
 
-  Record *rec = data_block_read_record(data_block_start, data_block_header,
-                                       indices, tree_info, 0);
+  Record *rec = malloc(sizeof(Record));
 
-  *out_record = rec;
+  for (int i = 0; i < number_of_records; i++) {
+    rec = data_block_read_record(data_block_start, data_block_header, indices,
+                                 tree_info, i);
+    int pk = record_get_key(&tree_info->schema, rec);
+    if (pk == key) {
+      *out_record = rec;
+      return 0;
+    } else {
+      return -1;
+    }
+  }
 
   // printf("printing record:");
   // record_print(&tree_info->schema, rec);
 
-  // BF_UnpinBlock(info_block);
-  // BF_UnpinBlock(res_block);
+  BF_UnpinBlock(info_block);
+  BF_UnpinBlock(res_block);
+  free(indices);
 
   return -1;
 }
