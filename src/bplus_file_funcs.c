@@ -224,35 +224,35 @@ int bplus_close_file(const int file_desc, BPlusMeta *metadata) {
 // these that return int, always return 0 on success, -1 on failure
 
 struct context {
-    // bplus_record_insert arguments
-    int file_desc;
-    BPlusMeta *metadata;
-    const Record *record;
+  // bplus_record_insert arguments
+  int file_desc;
+  BPlusMeta *metadata;
+  const Record *record;
 
-    // variables
-    BF_Block *header_block;
-    char *header_block_start;
-    BPlusMeta *internal_metadata;
+  // variables
+  BF_Block *header_block;
+  char *header_block_start;
+  BPlusMeta *internal_metadata;
 
-    int inserted_key;
-    int inserted_block_index;
+  int inserted_key;
+  int inserted_block_index;
 
-    BF_Block *found_block;
-    int found_block_index;
-    char *found_block_start;
-    DataNodeHeader *found_block_header;
-    int *found_block_index_array;
-    int found_block_insert_pos;
+  BF_Block *found_block;
+  int found_block_index;
+  char *found_block_start;
+  DataNodeHeader *found_block_header;
+  int *found_block_index_array;
+  int found_block_insert_pos;
 
-    Record *temp_heap;
-    int *temp_index_array;
-    int second_half_start;
+  Record *temp_heap;
+  int *temp_index_array;
+  int second_half_start;
 
-    BF_Block *new_data_block;
-    int new_data_block_index;
-    char *new_data_block_start;
-    DataNodeHeader *new_data_block_header;
-    int *new_data_block_index_array;
+  BF_Block *new_data_block;
+  int new_data_block_index;
+  char *new_data_block_start;
+  DataNodeHeader *new_data_block_header;
+  int *new_data_block_index_array;
 };
 
 void cleanup_context(struct context *ctx)
@@ -743,15 +743,21 @@ int bplus_record_find(const int file_desc, const BPlusMeta *metadata,
   int *block_index = malloc(sizeof(int));
   tree_search_data_block(root_pos, key, file_desc, res_block, block_index);
 
+  // Accessing the acquired data block
   char *data_block_start = BF_Block_GetData(res_block);
 
+  // Receiving the specific data block's header and metadata, specifically the
+  // number of records currently stored in the block
   DataNodeHeader *data_block_header = data_block_read_header(data_block_start);
-
   int number_of_records = data_block_header->record_count;
 
+  // Receiving a list of the available indexes, sorted from the lowest to
+  // highest key value
   int *indices = malloc(number_of_records * sizeof(int));
   indices = data_block_read_index_array(data_block_start, tree_info);
 
+  // Iterating through the accessed data block for the record with the key value
+  // being searched for
   Record *rec = malloc(sizeof(Record));
 
   for (int i = 0; i < number_of_records; i++) {
@@ -760,15 +766,19 @@ int bplus_record_find(const int file_desc, const BPlusMeta *metadata,
     int pk = record_get_key(&tree_info->schema, rec);
     if (pk == key) {
       *out_record = rec;
+
+      // Clearing memory
+      BF_UnpinBlock(info_block);
+      BF_UnpinBlock(res_block);
+      free(indices);
+
       return 0;
-    } else {
-      return -1;
     }
+
+    free(rec);
   }
 
-  // printf("printing record:");
-  // record_print(&tree_info->schema, rec);
-
+  // Clearing memory
   BF_UnpinBlock(info_block);
   BF_UnpinBlock(res_block);
   free(indices);
