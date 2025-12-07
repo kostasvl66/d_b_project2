@@ -1,7 +1,7 @@
 # Υλοποίηση των BPlus συναρτήσεων
 
-- Υλοποιήσεις από Εμμανουήλ-Ταξιάρχη Οζίνη (sdi2300147): `bplus_create_file`, `bplus_record_insert`
-- Υλοποιήσεις από Κωνσταντίνο Γεώργιο Βλαζάκη (sdi2300017): `bplus_open_file`, `bplus_close_file`, `bplus_record_find`
+- Υλοποιήσεις από **Εμμανουήλ-Ταξιάρχη Οζίνη (sdi2300147)**: `bplus_create_file`, `bplus_record_insert`
+- Υλοποιήσεις από **Κωνσταντίνο Γεώργιο Βλαζάκη (sdi2300017)**: `bplus_open_file`, `bplus_close_file`, `bplus_record_find`
 
 ## Επεξήγηση αναπαράστασης B+ δέντρου
 Κάθε block χαρακτηρίζεται ως *data block* η *index block*. Εξαίρεση είναι το block 0 που περιέχει τα metadata και επειδή είναι στατικό δεν παρέχει τρόπο ελέγχου για το είδος του.
