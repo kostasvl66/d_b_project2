@@ -903,15 +903,21 @@ int bplus_record_find(const int file_desc, const BPlusMeta *metadata,
   int *block_index = malloc(sizeof(int));
   tree_search_data_block(root_pos, key, file_desc, res_block, block_index);
 
+  // Accessing the acquired data block
   char *data_block_start = BF_Block_GetData(res_block);
 
+  // Receiving the specific data block's header and metadata, specifically the
+  // number of records currently stored in the block
   DataNodeHeader *data_block_header = data_block_read_header(data_block_start);
-
   int number_of_records = data_block_header->record_count;
 
+  // Receiving a list of the available indexes, sorted from the lowest to
+  // highest key value
   int *indices = malloc(number_of_records * sizeof(int));
   indices = data_block_read_index_array(data_block_start, tree_info);
 
+  // Iterating through the accessed data block for the record with the key value
+  // being searched for
   Record *rec = malloc(sizeof(Record));
 
   for (int i = 0; i < number_of_records; i++) {
@@ -920,15 +926,19 @@ int bplus_record_find(const int file_desc, const BPlusMeta *metadata,
     int pk = record_get_key(&tree_info->schema, rec);
     if (pk == key) {
       *out_record = rec;
+
+      // Clearing memory
+      BF_UnpinBlock(info_block);
+      BF_UnpinBlock(res_block);
+      free(indices);
+
       return 0;
-    } else {
-      return -1;
     }
+
+    free(rec);
   }
 
-  // printf("printing record:");
-  // record_print(&tree_info->schema, rec);
-
+  // Clearing memory
   BF_UnpinBlock(info_block);
   BF_UnpinBlock(res_block);
   free(indices);
