@@ -1,5 +1,6 @@
 #include "../include/bf.h"
 #include "../include/bplus_datanode.h"
+#include "../include/bplus_index_node.h"
 #include "../include/bplus_file_structs.h"
 // Μπορείτε να προσθέσετε εδώ βοηθητικές συναρτήσεις για την επεξεργασία Κόμβων toy Ευρετηρίου.
 
@@ -227,4 +228,53 @@ int data_block_search_insert_pos(const char *block_start, const DataNodeHeader *
 {
     return data_block_binary_search_insert_pos(block_start, block_header, index_array, metadata,
                                                0, block_header->record_count - 1, new_key);
+}
+
+int print_all_blocks(int file_desc)
+{
+    BF_Block *header_block;
+    BF_Block_Init(&header_block);
+    CALL_BF(BF_GetBlock(file_desc, 0, header_block));
+    char *header_block_start = BF_Block_GetData(header_block);
+
+    BPlusMeta metadata;
+    memcpy(&metadata, header_block_start, sizeof(BPlusMeta));
+
+    printf("\nMetadata:\n");
+    printf("Magic number (4 bytes): ");
+    for (int i = 0; i < 4; i++) {
+        printf("0x%02x ", (unsigned char)metadata.magic_num[i]);
+    }
+    printf("\n");
+    printf("block_count = %d\n", metadata.block_count);
+    printf("record_count = %d\n", metadata.record_count);
+    printf("max_records_per_block = %d\n", metadata.max_records_per_block);
+    printf("max_indexes_per_block = %d\n", metadata.max_indexes_per_block);
+    printf("root_index = %d\n", metadata.root_index);
+    schema_print(&(metadata.schema));
+    printf("\n");
+
+    BF_Block *block;
+    BF_Block_Init(&block);
+    for (int i = 1; i < metadata.block_count; i++) {
+        CALL_BF(BF_GetBlock(file_desc, i, block));
+        char *block_start = BF_Block_GetData(block);
+
+        printf("( %d ) ", i);
+        if (is_data_block(block_start)) {
+            printf("DATA BLOCK\n");
+            data_block_print(block_start, &metadata);
+            printf("\n");
+        }
+        else {
+            printf("INDEX BLOCK\n");
+            index_block_print(block_start, &metadata);
+            printf("\n");
+        }
+
+        CALL_BF(BF_UnpinBlock(block));
+    }
+    BF_Block_Destroy(&block);
+
+    return 0;
 }

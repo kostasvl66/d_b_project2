@@ -84,4 +84,7 @@ int data_block_write_unordered_record(char *block_start, const BPlusMeta *metada
 int data_block_search_insert_pos(const char *block_start, const DataNodeHeader *block_header, const int *index_array,
                                  const BPlusMeta *metadata, int new_key);
 
+// prints metadata info and each block in ascending block id order
+int print_all_blocks(int file_desc);
+
 #endif

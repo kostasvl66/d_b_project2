@@ -64,6 +64,11 @@ int tree_search_data_block(int root_index, int key, int file_desc, BF_Block *fou
     // determining the new_root_index to follow
     int new_root_index;
     int position = index_block_key_search(block_start, block_header, key);
+    if (position == INDEX_BLOCK_SEARCH_ERROR) {
+        CALL_BF(BF_UnpinBlock(found_block));
+        free(block_header);
+        return -1;
+    }
 
     if (position == -1) {
         // continue in leftmost index
@@ -253,6 +258,24 @@ struct context {
     char *new_data_block_start;
     DataNodeHeader *new_data_block_header;
     int *new_data_block_index_array;
+
+    int parent_index_block_has_data_block_children;
+    BF_Block *parent_index_block;
+    int parent_index_block_index;
+    char *parent_index_block_start;
+    IndexNodeHeader *parent_index_block_header;
+    int parent_index_block_insert_pos;
+    IndexNodeEntry *parent_index_block_entry_array;
+    
+    BF_Block *index_block;
+    int index_block_index;
+    char *index_block_start;
+    IndexNodeHeader *index_block_header;
+
+    BF_Block *new_index_block;
+    int new_index_block_index;
+    char *new_index_block_start;
+    IndexNodeHeader *new_index_block_header;
 };
 
 void cleanup_context(struct context *ctx)
@@ -278,6 +301,24 @@ void cleanup_context(struct context *ctx)
         BF_UnpinBlock(ctx->new_data_block);
         BF_Block_Destroy(&(ctx->new_data_block));
     }
+
+    if (ctx->parent_index_block) {
+        BF_Block_SetDirty(ctx->parent_index_block);
+        BF_UnpinBlock(ctx->parent_index_block);
+        BF_Block_Destroy(&(ctx->parent_index_block));
+    }
+
+    if (ctx->index_block) {
+        BF_Block_SetDirty(ctx->index_block);
+        BF_UnpinBlock(ctx->index_block);
+        BF_Block_Destroy(&(ctx->index_block));
+    }
+
+    if (ctx->new_index_block) {
+        BF_Block_SetDirty(ctx->new_index_block);
+        BF_UnpinBlock(ctx->new_index_block);
+        BF_Block_Destroy(&(ctx->new_index_block));
+    }
     
     // memory cleanup
     // the following pointers are all initialized to NULL at the very start
@@ -293,6 +334,13 @@ void cleanup_context(struct context *ctx)
 
     free(ctx->new_data_block_header);
     free(ctx->new_data_block_index_array);
+
+    free(ctx->parent_index_block_header);
+    free(ctx->parent_index_block_entry_array);
+
+    free(ctx->index_block_header);
+
+    free(ctx->new_index_block_header);
 }
 
 int load_internal_metadata(struct context *ctx)
@@ -649,12 +697,92 @@ int create_index_block_root_above_data_blocks(struct context *ctx)
     data_block_write_header(ctx->new_data_block_start, ctx->new_data_block_header);
 
     BF_Block_SetDirty(root_index_block);
-    data_block_print(ctx->found_block_start, ctx->internal_metadata);
-    data_block_print(ctx->new_data_block_start, ctx->internal_metadata);
-    index_block_print(root_index_block_start, ctx->internal_metadata);
     CALL_BF(BF_UnpinBlock(root_index_block));
     BF_Block_Destroy(&root_index_block);
     free(root_index_block_header);
+    return 0;
+}
+
+int initialize_parent_index_block(struct context *ctx)
+{
+    // getting the parent of found block
+    BF_Block_Init(&(ctx->parent_index_block));
+    CALL_BF(BF_GetBlock(ctx->file_desc, ctx->found_block_header->parent_index, ctx->parent_index_block));
+    ctx->parent_index_block_start = BF_Block_GetData(ctx->parent_index_block);
+
+    ctx->parent_index_block_index = ctx->found_block_header->parent_index;
+
+    // getting the header
+    ctx->parent_index_block_header = index_block_read_header(ctx->parent_index_block_start);
+    if (!(ctx->parent_index_block_header))
+        return -1;
+
+    return 0;
+}
+
+int find_index_block_insert_pos(struct context *ctx)
+{
+    // inserted_key can be safely overwritten, its old value is not needed anymore
+    if (ctx->parent_index_block_has_data_block_children)
+        ctx->inserted_key = ctx->new_data_block_header->min_record_key;
+    else
+        ctx->inserted_key = ctx->new_index_block_header->min_record_key;
+
+    // getting the insert position as a 0-based entry position, which excludes the leftmost index
+    int entry_pos = index_block_search_insert_pos(ctx->parent_index_block_start, ctx->parent_index_block_header, ctx->inserted_key);
+    if (entry_pos == INDEX_BLOCK_SEARCH_ERROR || entry_pos == -1)
+        return -1;
+
+    // the typical insert position is adjusted to include leftmost index as position 0, but in practice it cannot be 0
+    // this is done for compatibility with helper functions that are used later
+    ctx->parent_index_block_insert_pos = entry_pos + 1;
+
+    return 0;
+}
+
+int insert_index_to_index_block(struct context *ctx)
+{
+    ctx->parent_index_block_header->index_count++;
+    index_block_write_header(ctx->parent_index_block_start, ctx->parent_index_block_header);
+
+    // getting the entry array
+    ctx->parent_index_block_entry_array = malloc(ctx->parent_index_block_header->index_count * sizeof(IndexNodeEntry));
+    if (!(ctx->parent_index_block_entry_array))
+        return -1;
+
+    index_block_read_entries_as_array(ctx->parent_index_block_start, ctx->parent_index_block_header, ctx->parent_index_block_entry_array);
+    
+    // shifting the entries of entry array starting from position parent_index_block_insert_pos, to make space for the new entry
+    memmove(
+        &(ctx->parent_index_block_entry_array[ctx->parent_index_block_insert_pos + 1]),
+        &(ctx->parent_index_block_entry_array[ctx->parent_index_block_insert_pos]),
+        (ctx->parent_index_block_header->index_count - 1 - ctx->parent_index_block_insert_pos) * sizeof(IndexNodeEntry)
+    );
+
+    // writing the new entry in entry array's insert position
+    IndexNodeEntry inserted_entry;
+    inserted_entry.key = ctx->inserted_key;
+    if (ctx->parent_index_block_has_data_block_children)
+        inserted_entry.right_index = ctx->new_data_block_index;
+    else
+        inserted_entry.right_index = ctx->new_index_block_index;
+
+    memcpy(&(ctx->parent_index_block_entry_array[ctx->parent_index_block_insert_pos]), &inserted_entry, sizeof(IndexNodeEntry));
+
+    // writing back the entry array
+    index_block_write_array_as_entries(ctx->parent_index_block_start, ctx->parent_index_block_header,
+        ctx->parent_index_block_entry_array, ctx->parent_index_block_header->index_count);
+
+    // update parent index of added child
+    if (ctx->parent_index_block_has_data_block_children) {
+        ctx->new_data_block_header->parent_index = ctx->parent_index_block_index;
+        data_block_write_header(ctx->new_data_block_start, ctx->new_data_block_header);
+    }
+    else {
+        ctx->new_index_block_header->parent_index = ctx->parent_index_block_index;
+        index_block_write_header(ctx->new_index_block_start, ctx->new_index_block_header);
+    }
+
     return 0;
 }
 
@@ -714,6 +842,38 @@ int bplus_record_insert(const int file_desc, BPlusMeta *metadata, const Record *
         cleanup_context(&ctx);
         return ctx.inserted_block_index;
     }
+
+    // else the old block does have a parent, and the new block must be assigned to a parent too
+
+    // assign found block's parent to parent_index_block
+    ctx.parent_index_block_has_data_block_children = 1;
+    SAFE_CALL(initialize_parent_index_block(&ctx), ctx);
+
+    do {
+        if (!ctx.parent_index_block_has_data_block_children) {
+            // assigning index block's parent to index block
+            // TODO
+        }
+
+        // find the hypothetical insert position for the new block's index in index block, even if it doesn't have free space
+        SAFE_CALL(find_index_block_insert_pos(&ctx), ctx);
+
+        if (index_block_has_available_space(ctx.parent_index_block_header, ctx.internal_metadata)) {
+            // inserting the index to the parent index block
+            SAFE_CALL(insert_index_to_index_block(&ctx), ctx);
+            cleanup_context(&ctx);
+            return ctx.inserted_block_index;
+        }
+
+        // else the parent index block has no free space
+        // TODO
+
+        // updating flag after the first iteration
+        if (ctx.parent_index_block_has_data_block_children)
+            ctx.parent_index_block_has_data_block_children = 0;
+
+    } while (ctx.parent_index_block_header->parent_index != -1);
+
 
     cleanup_context(&ctx);
     return ctx.inserted_block_index;

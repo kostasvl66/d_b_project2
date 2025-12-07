@@ -109,14 +109,14 @@ IndexNodeEntry *index_block_read_entry(const char *block_start, const IndexNodeH
 void index_block_read_entries_as_array(const char *block_start, const IndexNodeHeader *block_header, IndexNodeEntry *entry_array)
 {
     const char *leftmost_index_start = block_start + sizeof(int) + sizeof(IndexNodeHeader);
-    const char *entry1_start = leftmost_index_start + sizeof(int) + sizeof(IndexNodeEntry);
+    const char *entry1_start = leftmost_index_start + sizeof(int);
 
     // entry_array[0] corresponds to the block's leftmost index
     entry_array[0].key = block_header->min_record_key;
     memcpy(&(entry_array[0].right_index), leftmost_index_start, sizeof(int));
 
     // copying the rest of the entries
-    memcpy(entry_array + sizeof(IndexNodeEntry), entry1_start, (block_header->index_count - 1) * sizeof(IndexNodeEntry));
+    memcpy(&entry_array[1], entry1_start, (block_header->index_count - 1) * sizeof(IndexNodeEntry));
 }
 
 int index_block_has_available_space(const IndexNodeHeader *block_header, const BPlusMeta *metadata)

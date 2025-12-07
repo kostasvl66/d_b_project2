@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define RECORDS_NUM 4 // Number of random records to insert & search
+#define RECORDS_NUM 7 // Number of random records to insert & search
 
 // Macro to handle BF library errors
 #define CALL_OR_DIE(call)                                                      \
@@ -31,7 +31,7 @@ void search_records(TableSchema schema,
 int main() {
   const TableSchema employee_schema = employee_get_schema();
   insert_records(employee_schema, employee_random_record, "employees.db");
-  search_records(employee_schema, employee_random_record, "employees.db");
+  //search_records(employee_schema, employee_random_record, "employees.db");
 
   return 0;
   /*
@@ -76,6 +76,7 @@ void insert_records(const TableSchema schema,
 
     bplus_record_insert(file_desc, info, &record);
   }
+  print_all_blocks(file_desc);
 
   // Clean up
   bplus_close_file(file_desc, info);
