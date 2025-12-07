@@ -64,7 +64,7 @@ void index_block_print(const char *block_start, const BPlusMeta* metadata)
     printf("\n");
     free(header);
     
-    printf("Unused space: %tdB\n", BF_BLOCK_SIZE - (block_ptr - block_start));
+    printf("Unused space: %td Bytes\n", BF_BLOCK_SIZE - (block_ptr - block_start));
 
     for (int i = 0; i < 20; i++) printf("-");
     printf("\n");

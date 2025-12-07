@@ -153,8 +153,7 @@ int bplus_create_file(const TableSchema *schema, const char *fileName)
     header_temp->record_count = 0;
     memcpy(&(header_temp->schema), schema, sizeof(TableSchema));
     header_temp->max_records_per_block = (int)((BF_BLOCK_SIZE - sizeof(DataNodeHeader) - sizeof(int)) / (sizeof(Record) + sizeof(int)));
-    //header_temp->max_indexes_per_block = 1 + (int)((BF_BLOCK_SIZE - sizeof(IndexNodeHeader) - 2 * sizeof(int)) / sizeof(IndexNodeEntry));
-    header_temp->max_indexes_per_block = 3;
+    header_temp->max_indexes_per_block = 1 + (int)((BF_BLOCK_SIZE - sizeof(IndexNodeHeader) - 2 * sizeof(int)) / sizeof(IndexNodeEntry));
     header_temp->root_index = -1; // this means that the B+ tree has currenty no root
 
     memcpy(BF_Block_GetData(header_block), header_temp, sizeof(BPlusMeta)); // memcpy to avoid unaligned address problems
@@ -316,6 +315,12 @@ void cleanup_context(struct context *ctx)
         BF_Block_Destroy(&(ctx->parent_index_block));
     }
 
+    if (ctx->new_parent_index_block) {
+        BF_Block_SetDirty(ctx->new_parent_index_block);
+        BF_UnpinBlock(ctx->new_parent_index_block);
+        BF_Block_Destroy(&(ctx->new_parent_index_block));
+    }
+
     if (ctx->index_block) {
         BF_Block_SetDirty(ctx->index_block);
         BF_UnpinBlock(ctx->index_block);
@@ -326,13 +331,7 @@ void cleanup_context(struct context *ctx)
         BF_Block_SetDirty(ctx->new_index_block);
         BF_UnpinBlock(ctx->new_index_block);
         BF_Block_Destroy(&(ctx->new_index_block));
-    }
-
-    if (ctx->new_parent_index_block) {
-        BF_Block_SetDirty(ctx->new_parent_index_block);
-        BF_UnpinBlock(ctx->new_parent_index_block);
-        BF_Block_Destroy(&(ctx->new_parent_index_block));
-    }
+    }  
     
     // memory cleanup
     // the following pointers are all initialized to NULL at the very start
@@ -1001,6 +1000,144 @@ int split_content_between_index_blocks(struct context *ctx)
     return 0;
 }
 
+int create_index_block_root_above_index_blocks(struct context *ctx)
+{
+    BF_Block *root_index_block;
+    BF_Block_Init(&root_index_block);
+
+    CALL_BF(BF_AllocateBlock(ctx->file_desc, root_index_block));
+    char *root_index_block_start = BF_Block_GetData(root_index_block);
+
+    // updating internal_metadata
+    ctx->internal_metadata->block_count++;
+    ctx->internal_metadata->root_index = ctx->internal_metadata->block_count - 1;
+    memcpy(ctx->header_block_start, ctx->internal_metadata, sizeof(BPlusMeta));
+    memcpy(ctx->metadata, ctx->internal_metadata, sizeof(BPlusMeta)); // updating the external metadata
+
+    // updating the block's header
+    set_index_block(root_index_block_start);
+
+    IndexNodeHeader *root_index_block_header = malloc(sizeof(IndexNodeHeader));
+    if (!root_index_block_header) {
+        CALL_BF(BF_UnpinBlock(root_index_block));
+        BF_Block_Destroy(&root_index_block);
+        return -1;
+    }
+    
+    root_index_block_header->index_count = 2;
+    root_index_block_header->parent_index = -1; // root has no parent
+    // root_index_block_header->min_record_key is updated later **internally** by index_block_write_array_as_entries()
+
+    // assigning the entries and lefmost index
+    IndexNodeEntry entry_array[2];
+
+    entry_array[0].key = ctx->parent_index_block_header->min_record_key; // this will become min key of root_index_block
+    entry_array[0].right_index = ctx->parent_index_block_index; // this will become leftmost index of root_index_block
+
+    entry_array[1].key = ctx->new_parent_index_block_header->min_record_key; // this will be the first key in root_index_block
+    entry_array[1].right_index = ctx->new_parent_index_block_index; // this will be the index in the right of the first key
+
+    // writing back both leftmost index and entries, which is done in this one call
+    index_block_write_array_as_entries(root_index_block_start, root_index_block_header, entry_array, 2);
+
+    // writing back the header
+    index_block_write_header(root_index_block_start, root_index_block_header);
+    
+    // updating the index block children to point to the new root
+    ctx->parent_index_block_header->parent_index = ctx->internal_metadata->root_index;
+    index_block_write_header(ctx->parent_index_block_start, ctx->parent_index_block_header);
+
+    ctx->new_parent_index_block_header->parent_index = ctx->internal_metadata->root_index;
+    index_block_write_header(ctx->new_parent_index_block_start, ctx->new_parent_index_block_header);
+
+    BF_Block_SetDirty(root_index_block);
+    CALL_BF(BF_UnpinBlock(root_index_block));
+    BF_Block_Destroy(&root_index_block);
+    free(root_index_block_header);
+    return 0;
+}
+
+int update_parent_index_blocks(struct context *ctx)
+{
+    // defining the updated indexes
+    int updated_index_block_index = ctx->parent_index_block_index;
+    int updated_new_index_block_index = ctx->new_parent_index_block_index;
+    int updated_parent_index_block_index = ctx->parent_index_block_header->parent_index;
+    // updated version of new_parent_index_block isn't needed yet;
+    // it is made by create_new_parent_index_block() when needed
+
+    // cleaning up all children and parent blocks
+    if (ctx->parent_index_block) {
+        BF_Block_SetDirty(ctx->parent_index_block);
+        BF_UnpinBlock(ctx->parent_index_block);
+        BF_Block_Destroy(&(ctx->parent_index_block));
+    }
+
+    if (ctx->new_parent_index_block) {
+        BF_Block_SetDirty(ctx->new_parent_index_block);
+        BF_UnpinBlock(ctx->new_parent_index_block);
+        BF_Block_Destroy(&(ctx->new_parent_index_block));
+    }
+
+    if (ctx->index_block) {
+        BF_Block_SetDirty(ctx->index_block);
+        BF_UnpinBlock(ctx->index_block);
+        BF_Block_Destroy(&(ctx->index_block));
+    }
+
+    if (ctx->new_index_block) {
+        BF_Block_SetDirty(ctx->new_index_block);
+        BF_UnpinBlock(ctx->new_index_block);
+        BF_Block_Destroy(&(ctx->new_index_block));
+    }
+
+    free(ctx->parent_index_block_header);
+    free(ctx->parent_index_block_entry_array);
+    free(ctx->new_parent_index_block_header);
+    free(ctx->index_block_header);
+    free(ctx->new_index_block_header);
+
+    ctx->parent_index_block = NULL;
+    ctx->new_parent_index_block = NULL;
+    ctx->index_block = NULL;
+    ctx->new_index_block = NULL;
+
+    ctx->parent_index_block_header = NULL;
+    ctx->parent_index_block_entry_array = NULL;
+    ctx->new_parent_index_block_header = NULL;
+    ctx->index_block_header = NULL;
+    ctx->new_index_block_header = NULL;
+
+    // loading index_block as defined
+    BF_Block_Init(&(ctx->index_block));
+    CALL_BF(BF_GetBlock(ctx->file_desc, updated_index_block_index, ctx->index_block));
+    ctx->index_block_start = BF_Block_GetData(ctx->index_block);
+    ctx->index_block_index = updated_index_block_index;
+
+    ctx->index_block_header = index_block_read_header(ctx->index_block_start);
+    if (!(ctx->index_block_header)) return -1;
+
+    // loading new_index_block as defined
+    BF_Block_Init(&(ctx->new_index_block));
+    CALL_BF(BF_GetBlock(ctx->file_desc, updated_new_index_block_index, ctx->new_index_block));
+    ctx->new_index_block_start = BF_Block_GetData(ctx->new_index_block);
+    ctx->new_index_block_index = updated_new_index_block_index;
+
+    ctx->new_index_block_header = index_block_read_header(ctx->new_index_block_start);
+    if (!(ctx->new_index_block_header)) return -1;
+
+    // loading parent_index_block as defined
+    BF_Block_Init(&(ctx->parent_index_block));
+    CALL_BF(BF_GetBlock(ctx->file_desc, updated_parent_index_block_index, ctx->parent_index_block));
+    ctx->parent_index_block_start = BF_Block_GetData(ctx->parent_index_block);
+    ctx->parent_index_block_index = updated_parent_index_block_index;
+
+    ctx->parent_index_block_header = index_block_read_header(ctx->parent_index_block_start);
+    if (!(ctx->parent_index_block_header)) return -1;
+
+    return 0;
+}
+
 int bplus_record_insert(const int file_desc, BPlusMeta *metadata, const Record *record)
 {   
     // this contains the "context variables" needed by this function;
@@ -1066,8 +1203,8 @@ int bplus_record_insert(const int file_desc, BPlusMeta *metadata, const Record *
 
     do {
         if (!ctx.parent_index_block_has_data_block_children) {
-            // assigning index block's parent to index block
-            // TODO
+            // assigning parent_index_block to index_block and new_parent_index_block to new_index_block
+            SAFE_CALL(update_parent_index_blocks(&ctx), ctx);
         }
 
         // find the hypothetical insert position for the new block's index in index block, even if it doesn't have free space
@@ -1090,8 +1227,6 @@ int bplus_record_insert(const int file_desc, BPlusMeta *metadata, const Record *
 
         // update the old and new index block with the new contents
         SAFE_CALL(split_content_between_index_blocks(&ctx), ctx);
-        cleanup_context(&ctx);
-        return ctx.inserted_block_index;
 
         // updating flag after the first iteration
         if (ctx.parent_index_block_has_data_block_children)
@@ -1099,6 +1234,8 @@ int bplus_record_insert(const int file_desc, BPlusMeta *metadata, const Record *
 
     } while (ctx.parent_index_block_header->parent_index != -1);
 
+    // a new index block root must be made above parent_index_block and new_parent_index_block
+    SAFE_CALL(create_index_block_root_above_index_blocks(&ctx), ctx);
 
     cleanup_context(&ctx);
     return ctx.inserted_block_index;
