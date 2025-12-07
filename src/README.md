@@ -6,6 +6,8 @@
 ## Επεξήγηση αναπαράστασης B+ δέντρου
 Κάθε block χαρακτηρίζεται ως *data block* η *index block*. Εξαίρεση είναι το block 0 που περιέχει τα metadata και επειδή είναι στατικό δεν παρέχει τρόπο ελέγχου για το είδος του.
 
+### data blocks
+
 Παρακάτω φαίνεται η εσωτερική δομή που έχει καθοριστεί για κάθε *data block*, όπως φαίνεται και στον κώδικα:
 ```c
 /* The structure of a data block is the following; for each [][] pair there is no padding between
@@ -30,6 +32,8 @@ typedef struct {
     int min_record_key; // the minimum key of all records in the block; useful in insertion
 } DataNodeHeader;
 ```
+
+### index blocks
 
 Παρακάτω φαίνεται η εσωτερική δομή που έχει καθοριστεί για κάθε *index block*, όπως φαίνεται και στον κώδικα:
 ```c
@@ -68,6 +72,10 @@ typedef struct {
     int right_index;
 } IndexNodeEntry;
 ```
+
+Τόσο για τα *data blocks* όσο και για τα *index blocks* έχουν οριστεί πολλές συναρτήσεις στα αντίστοιχα αρχεία που βοηθούν στην αφαιρετική χρήση του παραπάνω τρόπου αποθήκευσης. Λεπτομέρειες για την κάθε συνάρτηση υπάρχουν στα αντίστοιχα σχόλια.
+
+### blocks μέσα στο αρχείο
 
 ## bplus_create_file
 Για την υλοποίηση της `bplus_create_file`, ανοίγει το αρχείο, δημιουργείται το block 0 που θα περιέχει τα metadata, δίνονται τιμές στα metadata και ξανακλείνει το αρχείο.
