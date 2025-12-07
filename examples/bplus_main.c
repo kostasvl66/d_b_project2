@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define RECORDS_NUM 7 // Number of random records to insert & search
+#define RECORDS_NUM 9 // Number of random records to insert & search
 
 // Macro to handle BF library errors
 #define CALL_OR_DIE(call)                                                      \

@@ -77,7 +77,7 @@ void index_block_write_leftmost_index(char *block_start, int leftmost_index);
 
 // writes the first count entries of entry_array to the block's entries, **including leftmost index** which
 // is assigned the index of entry_array[0]; also the key of entry_array[0] becomes the block's minimum key
-// count is assumed to not exceed max entry count; else, this is undefined behavior
+// count is assumed to not exceed max index count; else, this is undefined behavior
 // if count < 1 it does nothing
 void index_block_write_array_as_entries(char *block_start, IndexNodeHeader *block_header,
                                         const IndexNodeEntry *entry_array, int count);
