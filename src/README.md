@@ -31,6 +31,43 @@ typedef struct {
 } DataNodeHeader;
 ```
 
+Παρακάτω φαίνεται η εσωτερική δομή που έχει καθοριστεί για κάθε *index block*, όπως φαίνεται και στον κώδικα:
+```c
+/* The structure of an index block is the following; for each [][] pair there is no padding between
+** (START)[int][IndexNodeHeader][int][IndexNodeEntry][IndexNodeEntry]...[IndexNodeEntry][possibly unused space](END)
+** - int (first) is BLOCK_TYPE_DATA for data block, BLOCK_TYPE_INDEX for index block
+** - IndexNodeHeader is the index block header
+** - int (second) is leftmost index of the block, such that for each key accessible via that index: key < first_entry.key,
+**                                                where first_entry is the leftmost (smallest) IndexNodeEntry in the block
+** - IndexNodeEntry (0) ... IndexNodeEntry (k) with k < max_indexes_per_block are key-index entries,
+**                                             such that for each key accessible via entry.index, key >= entry.key for any entry;
+**                                             when a new one is inserted, some others are shifted to maintain ordering
+** - possibly unused space is either space not yet used by future entries or a remainder < sizeof(IndexNodeEntry)
+*/
+```
+
+Η δομή `IndexNodeHeader` είναι για την αποθήκευση του header του *index block* και ορίζεται ως:
+```c
+typedef struct {
+    // index_count is the number of children indexes currently stored
+    // number of keys is always index_count - 1
+    // number of entries (IndexNodeEntry) is also index_count - 1 (leftmost index is not an "entry")
+    int index_count;
+    int parent_index; // index of the parent block (index node)
+    int min_record_key; // minimum key accessible via the leftmost index; useful in insertion
+} IndexNodeHeader;
+```
+
+Επίσης η δομή `IndexNodeEntry` χρησιμοποιείται για την αποθήκευση ζευγών κλειδιού και δεξιού δείκτη στα *index blocks*, και για τον αριστερότερο δείκτη γίνεται ξεχωριστή αποθήκευση ενός `int` που αναφέρεται ως `leftmost_index`. Η δομή `IndexNodeEntry` ορίζεται ως:
+```c
+typedef struct {
+    // a key such that current_entry.right_index keys >= key and prev_entry.right_index keys < key,
+    // where prev_entry is any IndexNodeEntry at the left of current_entry;
+    // the leftmost index of an index node is defined separately of this struct
+    int key;
+    int right_index;
+} IndexNodeEntry;
+```
 
 ## bplus_create_file
 Για την υλοποίηση της `bplus_create_file`, ανοίγει το αρχείο, δημιουργείται το block 0 που θα περιέχει τα metadata, δίνονται τιμές στα metadata και ξανακλείνει το αρχείο.
