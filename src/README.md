@@ -3,6 +3,35 @@
 - Υλοποιήσεις από Εμμανουήλ-Ταξιάρχη Οζίνη (sdi2300147): `bplus_create_file`, `bplus_record_insert`
 - Υλοποιήσεις από Κωνσταντίνο Γεώργιο Βλαζάκη (sdi2300017): `bplus_open_file`, `bplus_close_file`, `bplus_record_find`
 
+## Επεξήγηση αναπαράστασης B+ δέντρου
+Κάθε block χαρακτηρίζεται ως *data block* η *index block*. Εξαίρεση είναι το block 0 που περιέχει τα metadata και επειδή είναι στατικό δεν παρέχει τρόπο ελέγχου για το είδος του.
+
+Παρακάτω φαίνεται η εσωτερική δομή που έχει καθοριστεί για κάθε *data block*, όπως φαίνεται και στον κώδικα:
+```c
+/* The structure of a data block is the following; for each [][] pair there is no padding between
+** (START)[int][DataNodeHeader][int[max_records_per_block]][Record][Record]...[Record][possibly unused space](END)
+** - int is BLOCK_TYPE_DATA for data block, BLOCK_TYPE_INDEX for index block
+** - DataNodeHeader is the data block header
+** - int[max_records_per_block] is an array of indexes to records, remains sorted so that the records themselves need not be sorted;
+**                              Only the first n values are valid, if n is the current number of records in the block
+** - Record (0) ... Record (k) with k < max_records_per_block are record data, each new one appended at the end;
+**                             because of that, this heap part is unsorted; their sorted order is defined using
+**                             the index array, which is always updated as needed
+** - possibly unused space is either space not yet used by future records or a remainder < sizeof(Record)
+*/
+```
+
+Η δομή `DataNodeHeader` είναι για την αποθήκευση του header του data block και ορίζεται ως:
+```c
+typedef struct {
+    int record_count; // number of records currently stored in the data blocks
+    int parent_index; // index of the parent block (index node)
+    int next_index; // index to the adjacent (to the right) data node
+    int min_record_key; // the minimum key of all records in the block; useful in insertion
+} DataNodeHeader;
+```
+
+
 ## bplus_create_file
 Για την υλοποίηση της `bplus_create_file`, ανοίγει το αρχείο, δημιουργείται το block 0 που θα περιέχει τα metadata, δίνονται τιμές στα metadata και ξανακλείνει το αρχείο.
 
